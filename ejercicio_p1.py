@@ -870,14 +870,12 @@ function evaluatePixel(samples) {
     metadatos_multicanal = metadatos_base.copy()
     metadatos_multicanal.update(count=3)
 
-    ruta_salida_verdadero = "p1_color_verdadero.tif"
-    with rasterio.open(ruta_salida_verdadero, "w", **metadatos_multicanal) as destino_rgb:
+    with rasterio.open(ruta_salida_rgb, "w", **metadatos_multicanal) as destino_rgb:
         destino_rgb.write(banda_rojo, 1)
         destino_rgb.write(banda_verde, 2)
         destino_rgb.write(banda_azul, 3)
-    print(f"[OK] Color verdadero exportado: {ruta_salida_verdadero}")
+    print(f"[OK] Color verdadero exportado: {ruta_salida_rgb}")
 
-    ruta_salida_falso = "p1_falso_color.tif"
     with rasterio.open(ruta_salida_falso, "w", **metadatos_multicanal) as destino_falso:
         destino_falso.write(banda_nir, 1)
         destino_falso.write(banda_rojo, 2)
@@ -890,6 +888,7 @@ function evaluatePixel(samples) {
         limites_bbox,
         rango_fechas,
         tamano_salida,
+        ruta_salida=ruta_resumen
     )
     ft_generar_panel_visual(
         banda_azul,
@@ -897,6 +896,8 @@ function evaluatePixel(samples) {
         banda_rojo,
         banda_nir,
         matriz_ndvi,
+        estadisticas_ndvi,
+        limites_bbox,
         ruta_salida=ruta_salida_panel
     )
     ft_generar_mapa_interactivo_p1(
