@@ -27,6 +27,9 @@ from ejercicio_p1 import (
     ft_validar_rango_fechas,
 )
 
+def fmt_num(valor, decimales=6):
+    return f"{valor:.{decimales}f}".replace('.', ',')
+
 
 BANDA_NIR_DEFECTO = 1
 BANDA_SWIR2_DEFECTO = 2
@@ -339,8 +342,8 @@ def ft_generar_resumen_p2(
         "Metodo: descarga por API de dos imagenes Sentinel-2 L2A PRE y POST incendio",
         "Coleccion: s2l2a_cdse",
         "Bandas usadas: B08 (NIR) y B12 (SWIR2)",
-        f"Filtro de nubosidad maxcc: {MAX_NUBOSIDAD_P2}",
-        f"Bounding box WGS84: oeste={oeste}, sur={sur}, este={este}, norte={norte}",
+        f"Filtro de nubosidad maxcc: {fmt_num(MAX_NUBOSIDAD_P2, 2)}",
+        f"Bounding box WGS84: oeste={fmt_num(oeste,2)}, sur={fmt_num(sur,2)}, este={fmt_num(este,2)}, norte={fmt_num(norte,2)}",
         f"Rango PRE-incendio: {rango_pre[0]} a {rango_pre[1]}",
         f"Rango POST-incendio: {rango_post[0]} a {rango_post[1]}",
         f"Tamano: {ancho} x {alto} pixeles",
@@ -361,28 +364,28 @@ def ft_generar_resumen_p2(
         "",
         "ESTADISTICAS NBR PRE-INCENDIO",
         "-" * 31,
-        f"Minimo: {estadisticas_pre['minimo']:.6f}",
-        f"Maximo: {estadisticas_pre['maximo']:.6f}",
-        f"Media: {estadisticas_pre['media']:.6f}",
-        f"Mediana: {estadisticas_pre['mediana']:.6f}",
+        f"Minimo: {fmt_num(estadisticas_pre['minimo'])}",
+        f"Maximo: {fmt_num(estadisticas_pre['maximo'])}",
+        f"Media: {fmt_num(estadisticas_pre['media'])}",
+        f"Mediana: {fmt_num(estadisticas_pre['mediana'])}",
         "",
         "ESTADISTICAS NBR POST-INCENDIO",
         "-" * 32,
-        f"Minimo: {estadisticas_post['minimo']:.6f}",
-        f"Maximo: {estadisticas_post['maximo']:.6f}",
-        f"Media: {estadisticas_post['media']:.6f}",
-        f"Mediana: {estadisticas_post['mediana']:.6f}",
+        f"Minimo: {fmt_num(estadisticas_post['minimo'])}",
+        f"Maximo: {fmt_num(estadisticas_post['maximo'])}",
+        f"Media: {fmt_num(estadisticas_post['media'])}",
+        f"Mediana: {fmt_num(estadisticas_post['mediana'])}",
         "",
         "ESTADISTICAS dNBR",
         "-" * 18,
-        f"Minimo: {estadisticas_dnbr['minimo']:.6f}",
-        f"Maximo: {estadisticas_dnbr['maximo']:.6f}",
-        f"Media: {estadisticas_dnbr['media']:.6f}",
-        f"Mediana: {estadisticas_dnbr['mediana']:.6f}",
-        f"Percentil 10: {estadisticas_dnbr['percentil_10']:.6f}",
-        f"Percentil 25: {estadisticas_dnbr['percentil_25']:.6f}",
-        f"Percentil 75: {estadisticas_dnbr['percentil_75']:.6f}",
-        f"Percentil 90: {estadisticas_dnbr['percentil_90']:.6f}",
+        f"Minimo: {fmt_num(estadisticas_dnbr['minimo'])}",
+        f"Maximo: {fmt_num(estadisticas_dnbr['maximo'])}",
+        f"Media: {fmt_num(estadisticas_dnbr['media'])}",
+        f"Mediana: {fmt_num(estadisticas_dnbr['mediana'])}",
+        f"Percentil 10: {fmt_num(estadisticas_dnbr['percentil_10'])}",
+        f"Percentil 25: {fmt_num(estadisticas_dnbr['percentil_25'])}",
+        f"Percentil 75: {fmt_num(estadisticas_dnbr['percentil_75'])}",
+        f"Percentil 90: {fmt_num(estadisticas_dnbr['percentil_90'])}",
         "",
         "CLASIFICACION DE SEVERIDAD",
         "-" * 28,
@@ -653,6 +656,28 @@ def ft_ejecutar_practica_p2_api(
     rango_post,
     tamano_salida,
 ):
+    import os
+    
+    # Crear carpeta de prueba
+    base_dir = "prueba_ejer2"
+    if not os.path.exists(base_dir):
+        os.makedirs(base_dir)
+        
+    num = 1
+    while os.path.exists(os.path.join(base_dir, f"prueba{num}")):
+        num += 1
+        
+    out_dir = os.path.join(base_dir, f"prueba{num}")
+    os.makedirs(out_dir)
+
+    ruta_pre = os.path.join(out_dir, "p2_nbr_pre.tif")
+    ruta_post = os.path.join(out_dir, "p2_nbr_post.tif")
+    ruta_dnbr = os.path.join(out_dir, "p2_dnbr.tif")
+    ruta_sev = os.path.join(out_dir, "p2_severidad_incendio.tif")
+    ruta_resumen = os.path.join(out_dir, "p2_resumen_resultados.txt")
+    ruta_salida_panel = os.path.join(out_dir, "p2_panel_visual.png")
+    ruta_mapa_interactivo = os.path.join(out_dir, "p2_mapa_interactivo.html")
+
     """
     Ejecuta la deteccion de cambios post-incendio descargando PRE y POST por API.
     """
@@ -683,11 +708,11 @@ def ft_ejecutar_practica_p2_api(
     resumen_clases = ft_resumir_clases_severidad(severidad)
 
     perfil_base = ft_crear_perfil_desde_bbox(nbr_pre, limites_bbox)
-    ft_exportar_geotiff_monobanda("p2_nbr_pre.tif", nbr_pre, perfil_base)
-    ft_exportar_geotiff_monobanda("p2_nbr_post.tif", nbr_post, perfil_base)
-    ft_exportar_geotiff_monobanda("p2_dnbr.tif", dnbr, perfil_base)
+    ft_exportar_geotiff_monobanda(ruta_pre, nbr_pre, perfil_base)
+    ft_exportar_geotiff_monobanda(ruta_post, nbr_post, perfil_base)
+    ft_exportar_geotiff_monobanda(ruta_dnbr, dnbr, perfil_base)
     ft_exportar_geotiff_monobanda(
-        "p2_severidad_incendio.tif",
+        ruta_sev,
         severidad,
         perfil_base,
         dtype="uint8",
@@ -702,6 +727,7 @@ def ft_ejecutar_practica_p2_api(
         rango_pre,
         rango_post,
         tamano_salida,
+        ruta_salida=ruta_resumen
     )
     ft_generar_panel_visual_p2(
         nbr_pre,
@@ -710,8 +736,9 @@ def ft_ejecutar_practica_p2_api(
         severidad,
         estadisticas_dnbr,
         limites_bbox,
+        ruta_salida=ruta_salida_panel
     )
-    ft_generar_mapa_interactivo_p2(nbr_pre, nbr_post, dnbr, severidad, limites_bbox)
+    ft_generar_mapa_interactivo_p2(nbr_pre, nbr_post, dnbr, severidad, limites_bbox, ruta_salida=ruta_mapa_interactivo)
 
 
 def ft_main_p2():

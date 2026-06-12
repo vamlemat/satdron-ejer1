@@ -33,7 +33,10 @@ TAMANO_SALIDA_DEFECTO = (512, 512)
 
 
 def ft_formatear_porcentaje(valor):
-    return f"{valor:.2f}%"
+    return f"{valor:.2f}".replace('.', ',') + "%"
+
+def fmt_num(valor, decimales=6):
+    return f"{valor:.{decimales}f}".replace('.', ',')
 
 
 def ft_inicializar_api():
@@ -363,7 +366,7 @@ def ft_generar_texto_resumen_ndvi(
         "-" * 22,
         f"Nivel de procesamiento: Sentinel-2 L2A",
         f"Coleccion: s2l2a_cdse",
-        f"Bounding box WGS84: oeste={oeste}, sur={sur}, este={este}, norte={norte}",
+        f"Bounding box WGS84: oeste={fmt_num(oeste,2)}, sur={fmt_num(sur,2)}, este={fmt_num(este,2)}, norte={fmt_num(norte,2)}",
         f"Rango de fechas: {rango_fechas[0]} a {rango_fechas[1]}",
         f"Tamano de salida: {ancho} x {alto} pixeles",
         "",
@@ -383,12 +386,12 @@ def ft_generar_texto_resumen_ndvi(
         lineas.extend(
             [
                 f"Canal {elemento['canal']} = {elemento['banda']} ({elemento['descripcion']})",
-                f"  Minimo: {stats['minimo']:.6f}",
-                f"  Maximo: {stats['maximo']:.6f}",
-                f"  Media: {stats['media']:.6f}",
-                f"  Mediana: {stats['mediana']:.6f}",
-                f"  Percentil 10: {stats['percentil_10']:.6f}",
-                f"  Percentil 90: {stats['percentil_90']:.6f}",
+                f"  Minimo: {fmt_num(stats['minimo'])}",
+                f"  Maximo: {fmt_num(stats['maximo'])}",
+                f"  Media: {fmt_num(stats['media'])}",
+                f"  Mediana: {fmt_num(stats['mediana'])}",
+                f"  Percentil 10: {fmt_num(stats['percentil_10'])}",
+                f"  Percentil 90: {fmt_num(stats['percentil_90'])}",
             ]
         )
 
@@ -411,12 +414,12 @@ def ft_generar_texto_resumen_ndvi(
         lineas.extend(
             [
                 f"Canal {elemento['canal']} = {elemento['banda']} ({elemento['descripcion']})",
-                f"  Minimo: {stats['minimo']:.6f}",
-                f"  Maximo: {stats['maximo']:.6f}",
-                f"  Media: {stats['media']:.6f}",
-                f"  Mediana: {stats['mediana']:.6f}",
-                f"  Percentil 10: {stats['percentil_10']:.6f}",
-                f"  Percentil 90: {stats['percentil_90']:.6f}",
+                f"  Minimo: {fmt_num(stats['minimo'])}",
+                f"  Maximo: {fmt_num(stats['maximo'])}",
+                f"  Media: {fmt_num(stats['media'])}",
+                f"  Mediana: {fmt_num(stats['mediana'])}",
+                f"  Percentil 10: {fmt_num(stats['percentil_10'])}",
+                f"  Percentil 90: {fmt_num(stats['percentil_90'])}",
             ]
         )
 
@@ -433,14 +436,14 @@ def ft_generar_texto_resumen_ndvi(
             "ESTADISTICAS NDVI",
             "-" * 18,
             f"Pixeles validos: {estadisticas['pixeles_validos']}",
-            f"NDVI minimo: {estadisticas['minimo']:.6f}",
-            f"NDVI maximo: {estadisticas['maximo']:.6f}",
-            f"NDVI medio: {estadisticas['media']:.6f}",
-            f"NDVI mediana: {estadisticas['mediana']:.6f}",
-            f"Percentil 10: {estadisticas['percentil_10']:.6f}",
-            f"Percentil 25: {estadisticas['percentil_25']:.6f}",
-            f"Percentil 75: {estadisticas['percentil_75']:.6f}",
-            f"Percentil 90: {estadisticas['percentil_90']:.6f}",
+            f"NDVI minimo: {fmt_num(estadisticas['minimo'])}",
+            f"NDVI maximo: {fmt_num(estadisticas['maximo'])}",
+            f"NDVI medio: {fmt_num(estadisticas['media'])}",
+            f"NDVI mediana: {fmt_num(estadisticas['mediana'])}",
+            f"Percentil 10: {fmt_num(estadisticas['percentil_10'])}",
+            f"Percentil 25: {fmt_num(estadisticas['percentil_25'])}",
+            f"Percentil 75: {fmt_num(estadisticas['percentil_75'])}",
+            f"Percentil 90: {fmt_num(estadisticas['percentil_90'])}",
             "",
             "DISTRIBUCION POR RANGOS",
             "-" * 24,
@@ -759,6 +762,27 @@ def ft_ejecutar_practica_p1(
     rango_fechas,
     tamano_salida=(512, 512),
 ):
+    import os
+    
+    # Crear carpeta de prueba
+    base_dir = "prueba_ejer1"
+    if not os.path.exists(base_dir):
+        os.makedirs(base_dir)
+        
+    num = 1
+    while os.path.exists(os.path.join(base_dir, f"prueba{num}")):
+        num += 1
+        
+    out_dir = os.path.join(base_dir, f"prueba{num}")
+    os.makedirs(out_dir)
+
+    ruta_salida_ndvi = os.path.join(out_dir, "p1_resultado_ndvi.tif")
+    ruta_salida_rgb = os.path.join(out_dir, "p1_color_verdadero.tif")
+    ruta_salida_falso = os.path.join(out_dir, "p1_falso_color.tif")
+    ruta_resumen = os.path.join(out_dir, "p1_resumen_resultados.txt")
+    ruta_salida_panel = os.path.join(out_dir, "p1_panel_visual.png")
+    ruta_mapa_interactivo = os.path.join(out_dir, "p1_mapa_interactivo.html")
+
     """
     Descarga bandas Sentinel-2 L2A, calcula el NDVI y exporta composiciones
     georreferenciadas en formato GeoTIFF.
@@ -839,7 +863,6 @@ function evaluatePixel(samples) {
         "transform": from_bounds(oeste, sur, este, norte, ancho, alto),
     }
 
-    ruta_salida_ndvi = "p1_resultado_ndvi.tif"
     with rasterio.open(ruta_salida_ndvi, "w", **metadatos_base) as destino_ndvi:
         destino_ndvi.write(matriz_ndvi, 1)
     print(f"[OK] NDVI exportado: {ruta_salida_ndvi}")
@@ -874,8 +897,7 @@ function evaluatePixel(samples) {
         banda_rojo,
         banda_nir,
         matriz_ndvi,
-        estadisticas_ndvi,
-        limites_bbox,
+        ruta_salida=ruta_salida_panel
     )
     ft_generar_mapa_interactivo_p1(
         banda_azul,
@@ -883,7 +905,8 @@ function evaluatePixel(samples) {
         banda_rojo,
         banda_nir,
         matriz_ndvi,
-        limites_bbox
+        limites_bbox,
+        ruta_salida=ruta_mapa_interactivo
     )
 
 
