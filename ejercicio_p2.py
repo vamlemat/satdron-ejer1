@@ -11,6 +11,11 @@ import numpy as np
 import rasterio
 from rasterio.transform import from_bounds
 from sentinelhub import BBox, CRS, DataCollection, MimeType, MosaickingOrder, SentinelHubRequest
+import contextily as cx
+import folium
+from io import BytesIO
+import base64
+import webbrowser
 
 from ejercicio_p1 import (
     TAMANO_SALIDA_DEFECTO,
@@ -25,7 +30,7 @@ from ejercicio_p1 import (
 
 BANDA_NIR_DEFECTO = 1
 BANDA_SWIR2_DEFECTO = 2
-COORDENADAS_BBOX_P2_DEFECTO = [16.52, 43.45, 16.78, 43.58]
+COORDENADAS_BBOX_P2_DEFECTO = [16.56, 43.46, 16.76, 43.56]
 RANGO_PRE_INCENDIO_DEFECTO = ("2018-07-05", "2018-07-10")
 RANGO_POST_INCENDIO_DEFECTO = ("2018-07-20", "2018-07-25")
 MAX_NUBOSIDAD_P2 = 1.0
@@ -416,6 +421,7 @@ def ft_generar_panel_visual_p2(
     dnbr,
     severidad,
     estadisticas_dnbr,
+    limites_bbox,
     ruta_salida="p2_panel_visual.png",
 ):
     colores = [clase["color"] for clase in CLASES_SEVERIDAD]
@@ -462,6 +468,182 @@ def ft_generar_panel_visual_p2(
     fig.savefig(ruta_salida, dpi=180)
     plt.close(fig)
     print(f"[OK] Panel visual P2 exportado: {ruta_salida}")
+
+
+def ft_generar_mapa_interactivo_p2(nbr_pre, nbr_post, dnbr, severidad, limites_bbox, ruta_salida="p2_mapa_interactivo.html"):
+    """
+    Genera un mapa HTML interactivo con multiples capas (NBR pre/post, dNBR, severidad) y leyendas.
+    """
+    oeste, sur, este, norte = tuple(limites_bbox)
+    centro_lat = (sur + norte) / 2.0
+    centro_lon = (oeste + este) / 2.0
+    
+    m = folium.Map(location=[centro_lat, centro_lon], zoom_start=13, control_scale=True)
+    
+    # Capa de satélite estilo Google Earth (Esri World Imagery)
+    folium.TileLayer(
+        tiles='https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}',
+        attr='Esri',
+        name='Esri Satellite',
+        overlay=False,
+        control=True
+    ).add_to(m)
+    
+    # Funcion auxiliar para convertir matriz a imagen para folium
+    def numpy_a_url(matriz, cmap_nombre, vmin, vmax, alpha=0.7):
+        fig, ax = plt.subplots(figsize=(matriz.shape[1]/100, matriz.shape[0]/100), dpi=100)
+        fig.patch.set_alpha(0)
+        ax.axis('off')
+        
+        cmap = plt.get_cmap(cmap_nombre)
+        norm = plt.Normalize(vmin=vmin, vmax=vmax)
+        rgba = cmap(norm(matriz))
+        rgba[..., 3] = alpha
+        
+        ax.imshow(rgba)
+        buf = BytesIO()
+        fig.savefig(buf, format='png', bbox_inches='tight', pad_inches=0, transparent=True)
+        plt.close(fig)
+        buf.seek(0)
+        return f"data:image/png;base64,{base64.b64encode(buf.read()).decode('utf-8')}"
+
+    bounds = [[sur, oeste], [norte, este]]
+
+    # Capa NBR PRE
+    folium.raster_layers.ImageOverlay(
+        image=numpy_a_url(nbr_pre, "BrBG", -1, 1),
+        bounds=bounds,
+        name="NBR PRE-incendio",
+        show=False,
+    ).add_to(m)
+
+    # Capa NBR POST
+    folium.raster_layers.ImageOverlay(
+        image=numpy_a_url(nbr_post, "BrBG", -1, 1),
+        bounds=bounds,
+        name="NBR POST-incendio",
+        show=False,
+    ).add_to(m)
+
+    # Capa dNBR
+    folium.raster_layers.ImageOverlay(
+        image=numpy_a_url(dnbr, "YlOrRd", -0.2, 1),
+        bounds=bounds,
+        name="dNBR (Diferencia)",
+        show=False,
+    ).add_to(m)
+
+    # Capa Severidad (usamos el colormap personalizado)
+    colores = [clase["color"] for clase in CLASES_SEVERIDAD]
+    cmap_clases = mcolors.ListedColormap(colores)
+    norm_clases = mcolors.BoundaryNorm([0.5, 1.5, 2.5, 3.5, 4.5], cmap_clases.N)
+    
+    rgba_sev = cmap_clases(norm_clases(severidad))
+    rgba_sev[severidad == 1, 3] = 0.2  # Clase 1 mas transparente
+    rgba_sev[severidad != 1, 3] = 0.8
+    
+    fig_sev, ax_sev = plt.subplots(figsize=(severidad.shape[1]/100, severidad.shape[0]/100), dpi=100)
+    fig_sev.patch.set_alpha(0)
+    ax_sev.axis('off')
+    ax_sev.imshow(rgba_sev)
+    buf_sev = BytesIO()
+    fig_sev.savefig(buf_sev, format='png', bbox_inches='tight', pad_inches=0, transparent=True)
+    plt.close(fig_sev)
+    buf_sev.seek(0)
+    url_sev = f"data:image/png;base64,{base64.b64encode(buf_sev.read()).decode('utf-8')}"
+
+    folium.raster_layers.ImageOverlay(
+        image=url_sev,
+        bounds=bounds,
+        name="Clasificacion de Severidad",
+        show=True, # Por defecto mostramos la severidad
+    ).add_to(m)
+    
+    folium.Rectangle(
+        bounds=bounds,
+        color="#ff0000",
+        fill=False,
+        weight=2,
+        name="Area de estudio"
+    ).add_to(m)
+    
+    # Agregar Leyendas mediante HTML y script para hacerlas dinamicas
+    leyenda_html = """
+    <div id="leyenda_sev" style="position: fixed; bottom: 50px; right: 50px; width: 280px; height: auto; 
+         background-color: white; border:2px solid grey; z-index:9999; font-size:14px;
+         padding: 10px; border-radius: 5px; display: block;">
+         <b>Severidad del Incendio</b><br>
+         <i style="background:#2ca25f; width: 18px; height: 18px; float: left; margin-right: 8px;"></i> Sin cambio / no quemado<br>
+         <i style="background:#ffeda0; width: 18px; height: 18px; float: left; margin-right: 8px;"></i> Severidad baja<br>
+         <i style="background:#feb24c; width: 18px; height: 18px; float: left; margin-right: 8px;"></i> Severidad moderada<br>
+         <i style="background:#de2d26; width: 18px; height: 18px; float: left; margin-right: 8px;"></i> Severidad alta<br>
+    </div>
+
+    <div id="leyenda_nbr" style="position: fixed; bottom: 50px; right: 50px; width: 280px; height: auto; 
+         background-color: white; border:2px solid grey; z-index:9999; font-size:14px;
+         padding: 10px; border-radius: 5px; display: none;">
+         <b>NBR (Normalized Burn Ratio)</b><br>
+         <div style="background: linear-gradient(to right, #543005, #bf812d, #f5f5f5, #35978f, #003c30); 
+                     width: 100%; height: 20px; margin-top: 5px; margin-bottom: 5px;"></div>
+         <span style="float:left;">-1.0</span>
+         <span style="float:right;">1.0</span>
+         <div style="clear:both;"></div>
+    </div>
+
+    <div id="leyenda_dnbr" style="position: fixed; bottom: 50px; right: 50px; width: 280px; height: auto; 
+         background-color: white; border:2px solid grey; z-index:9999; font-size:14px;
+         padding: 10px; border-radius: 5px; display: none;">
+         <b>dNBR (Diferencia NBR)</b><br>
+         <div style="background: linear-gradient(to right, #ffffb2, #fecc5c, #fd8d3c, #f03b20, #bd0026); 
+                     width: 100%; height: 20px; margin-top: 5px; margin-bottom: 5px;"></div>
+         <span style="float:left;">-0.2</span>
+         <span style="float:right;">1.0</span>
+         <div style="clear:both;"></div>
+    </div>
+
+    <script>
+        // Leaflet no esta garantizado que este cargado en el scope raiz de inmediato,
+        // esperamos al evento onload o usamos un intervalo corto
+        setTimeout(function() {
+            var map_keys = Object.keys(window).filter(k => k.startsWith('map_'));
+            if(map_keys.length > 0) {
+                var myMap = window[map_keys[0]];
+                
+                myMap.on('overlayadd', function(eventLayer) {
+                    if (eventLayer.name === 'Clasificacion de Severidad') {
+                        document.getElementById('leyenda_sev').style.display = 'block';
+                    } else if (eventLayer.name === 'NBR PRE-incendio' || eventLayer.name === 'NBR POST-incendio') {
+                        document.getElementById('leyenda_nbr').style.display = 'block';
+                    } else if (eventLayer.name === 'dNBR (Diferencia)') {
+                        document.getElementById('leyenda_dnbr').style.display = 'block';
+                    }
+                });
+                
+                myMap.on('overlayremove', function(eventLayer) {
+                    if (eventLayer.name === 'Clasificacion de Severidad') {
+                        document.getElementById('leyenda_sev').style.display = 'none';
+                    } else if (eventLayer.name === 'NBR PRE-incendio' || eventLayer.name === 'NBR POST-incendio') {
+                        // Ocultar solo si la otra capa tampoco esta visible
+                        // Como es dificil de saber sin iterar, para la Demo simplemente lo ocultamos
+                        document.getElementById('leyenda_nbr').style.display = 'none';
+                    } else if (eventLayer.name === 'dNBR (Diferencia)') {
+                        document.getElementById('leyenda_dnbr').style.display = 'none';
+                    }
+                });
+            }
+        }, 1000);
+    </script>
+    """
+    m.get_root().html.add_child(folium.Element(leyenda_html))
+    
+    folium.LayerControl().add_to(m)
+    m.save(ruta_salida)
+    print(f"[OK] Mapa interactivo satelital exportado: {ruta_salida}")
+    
+    # Abrir automaticamente en el navegador
+    import os
+    ruta_absoluta = os.path.abspath(ruta_salida)
+    webbrowser.open('file://' + ruta_absoluta)
 
 
 def ft_ejecutar_practica_p2_api(
@@ -527,7 +709,9 @@ def ft_ejecutar_practica_p2_api(
         dnbr,
         severidad,
         estadisticas_dnbr,
+        limites_bbox,
     )
+    ft_generar_mapa_interactivo_p2(nbr_pre, nbr_post, dnbr, severidad, limites_bbox)
 
 
 def ft_main_p2():

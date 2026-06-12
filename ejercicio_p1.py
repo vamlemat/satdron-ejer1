@@ -20,6 +20,11 @@ from sentinelhub import (
     SHConfig,
     SentinelHubRequest,
 )
+import contextily as cx
+import folium
+from io import BytesIO
+import base64
+import webbrowser
 
 
 COORDENADAS_BBOX_DEFECTO = [-4.56, 37.02, -4.54, 37.04]
@@ -521,6 +526,7 @@ def ft_generar_panel_visual(
     banda_nir,
     matriz_ndvi,
     estadisticas_ndvi,
+    limites_bbox,
     ruta_salida="p1_panel_visual.png",
 ):
     """
@@ -578,6 +584,71 @@ def ft_generar_panel_visual(
     plt.close(fig)
 
     print(f"[OK] Panel visual exportado: {ruta_salida}")
+
+def ft_generar_mapa_interactivo_p1(matriz_ndvi, limites_bbox, ruta_salida="p1_mapa_interactivo.html"):
+    """
+    Genera un mapa HTML interactivo con el NDVI sobre una capa base.
+    """
+    oeste, sur, este, norte = tuple(limites_bbox)
+    centro_lat = (sur + norte) / 2.0
+    centro_lon = (oeste + este) / 2.0
+    
+    m = folium.Map(location=[centro_lat, centro_lon], zoom_start=13, control_scale=True)
+    
+    # Capa de satélite estilo Google Earth (Esri World Imagery)
+    folium.TileLayer(
+        tiles='https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}',
+        attr='Esri',
+        name='Esri Satellite',
+        overlay=False,
+        control=True
+    ).add_to(m)
+    
+    fig, ax = plt.subplots(figsize=(matriz_ndvi.shape[1]/100, matriz_ndvi.shape[0]/100), dpi=100)
+    fig.patch.set_alpha(0)
+    ax.axis('off')
+    
+    # cmap para ndvi
+    cmap = plt.get_cmap("RdYlGn")
+    norm = plt.Normalize(vmin=-1, vmax=1)
+    rgba_img = cmap(norm(matriz_ndvi))
+    
+    # Hacer que los valores menores que 0 sean mas transparentes
+    rgba_img[matriz_ndvi < 0, 3] = 0.2
+    rgba_img[matriz_ndvi >= 0, 3] = 0.7 
+    
+    ax.imshow(rgba_img)
+    
+    buf = BytesIO()
+    fig.savefig(buf, format='png', bbox_inches='tight', pad_inches=0, transparent=True)
+    plt.close(fig)
+    buf.seek(0)
+    img_base64 = base64.b64encode(buf.read()).decode('utf-8')
+    img_url = f"data:image/png;base64,{img_base64}"
+    
+    folium.raster_layers.ImageOverlay(
+        image=img_url,
+        bounds=[[sur, oeste], [norte, este]],
+        opacity=1.0,
+        name="NDVI",
+    ).add_to(m)
+    
+    folium.Rectangle(
+        bounds=[[sur, oeste], [norte, este]],
+        color="#ff0000",
+        fill=False,
+        weight=2,
+        name="Area de estudio"
+    ).add_to(m)
+    
+    folium.LayerControl().add_to(m)
+    m.save(ruta_salida)
+    print(f"[OK] Mapa interactivo satelital exportado: {ruta_salida}")
+    
+    # Abrir automaticamente en el navegador
+    import os
+    ruta_absoluta = os.path.abspath(ruta_salida)
+    webbrowser.open('file://' + ruta_absoluta)
 
 
 def ft_ejecutar_practica_p1(
@@ -702,7 +773,9 @@ function evaluatePixel(samples) {
         banda_nir,
         matriz_ndvi,
         estadisticas_ndvi,
+        limites_bbox,
     )
+    ft_generar_mapa_interactivo_p1(matriz_ndvi, limites_bbox)
 
 
 if __name__ == "__main__":
