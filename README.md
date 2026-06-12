@@ -22,7 +22,9 @@ El flujo completo es:
 
 ```text
 1ejersentinel/
+├── main.py
 ├── ejercicio_p1.py
+├── ejercicio_p2.py
 ├── requirements.txt
 ├── README.md
 ├── .env
@@ -33,12 +35,20 @@ El flujo completo es:
 ├── p1_color_verdadero.tif
 ├── p1_falso_color.tif
 ├── p1_resumen_resultados.txt
-└── p1_panel_visual.png
+├── p1_panel_visual.png
+├── p2_nbr_pre.tif
+├── p2_nbr_post.tif
+├── p2_dnbr.tif
+├── p2_severidad_incendio.tif
+├── p2_resumen_resultados.txt
+└── p2_panel_visual.png
 ```
 
 Descripcion de los archivos:
 
-- `ejercicio_p1.py`: programa principal.
+- `main.py`: menu principal para elegir entre P1 y P2.
+- `ejercicio_p1.py`: practica 1, NDVI y composiciones Sentinel-2.
+- `ejercicio_p2.py`: practica 2, deteccion de cambios post-incendio con descarga por API y dNBR.
 - `requirements.txt`: lista de dependencias Python.
 - `README.md`: documentacion completa del ejercicio.
 - `.env`: credenciales reales de Copernicus. No debe compartirse.
@@ -50,6 +60,12 @@ Descripcion de los archivos:
 - `p1_falso_color.tif`: composicion de falso color.
 - `p1_resumen_resultados.txt`: informe numerico final.
 - `p1_panel_visual.png`: panel visual generado con Matplotlib.
+- `p2_nbr_pre.tif`: NBR antes del incendio.
+- `p2_nbr_post.tif`: NBR despues del incendio.
+- `p2_dnbr.tif`: diferencia de NBR.
+- `p2_severidad_incendio.tif`: clasificacion de severidad en 4 clases.
+- `p2_resumen_resultados.txt`: informe numerico de P2.
+- `p2_panel_visual.png`: panel visual de P2.
 
 ## 3. Fuente de datos: Sentinel-2
 
@@ -263,7 +279,124 @@ Interpretacion aproximada:
 - 0.2 a 0.4: vegetacion moderada o posiblemente estresada.
 - Mayor que 0.4: vegetacion densa o sana.
 
-## 8. Requisitos previos
+## 8. Ejercicio P2: deteccion de cambios post-incendio
+
+El segundo ejercicio detecta cambios potenciales asociados a un incendio comparando una imagen Sentinel-2 anterior al incendio con otra posterior.
+
+La idea es:
+
+1. Introducir un area de estudio mediante bounding box.
+2. Introducir un rango temporal pre-incendio.
+3. Introducir un rango temporal post-incendio.
+4. Descargar por API las bandas necesarias para NBR.
+5. Calcular NBR en la imagen pre-incendio.
+6. Calcular NBR en la imagen post-incendio.
+7. Calcular dNBR como diferencia entre ambos.
+8. Clasificar la severidad potencial del incendio en 4 clases.
+9. Exportar GeoTIFF, resumen numerico y panel visual.
+
+Este punto vuelve a usar la API porque el navegador de Copernicus puede no permitir descargar facilmente las imagenes necesarias. No se necesita una API distinta: se usan las mismas credenciales del archivo `.env`.
+
+Las bandas descargadas para P2 son:
+
+- `B08`: infrarrojo cercano o NIR,
+- `B12`: SWIR2.
+
+En P2 se usa `maxcc=1.0` para no descartar escenas historicas por el filtro de nubosidad. Con el caso de referencia de julio de 2018, un filtro mas estricto como `maxcc=0.3` puede devolver `dataMask=0`, es decir, imagenes vacias aunque el calculo sea correcto.
+
+Caso de referencia usado como valores por defecto:
+
+```text
+Bounding box: oeste=16.52, sur=43.45, este=16.78, norte=43.58
+Fecha del incendio en maximo apogeo: 2018-07-17
+Rango PRE-incendio: 2018-07-05 a 2018-07-10
+Rango POST-incendio: 2018-07-20 a 2018-07-25
+```
+
+Estos valores permiten comparar resultados con otros trabajos que usen la misma zona y fechas.
+
+## 9. Que es el NBR
+
+NBR significa `Normalized Burn Ratio`.
+
+Se usa mucho para detectar areas quemadas porque combina:
+
+- `B08`: infrarrojo cercano o NIR.
+- `B12`: infrarrojo de onda corta o SWIR2.
+
+Formula:
+
+```text
+NBR = (NIR - SWIR2) / (NIR + SWIR2)
+```
+
+En Sentinel-2:
+
+```text
+NIR = B08
+SWIR2 = B12
+```
+
+Por tanto:
+
+```text
+NBR = (B08 - B12) / (B08 + B12)
+```
+
+La vegetacion sana suele tener NBR alto, porque refleja bastante en NIR y menos en SWIR2. Despues de un incendio, el NBR suele bajar porque la vegetacion pierde vigor y aumenta la respuesta en SWIR.
+
+## 10. Que es el dNBR
+
+dNBR significa `differenced Normalized Burn Ratio`.
+
+Formula:
+
+```text
+dNBR = NBR_pre - NBR_post
+```
+
+Interpretacion:
+
+- Si el NBR baja mucho despues del incendio, el dNBR sera alto.
+- Valores altos de dNBR suelen indicar mayor severidad.
+- Valores bajos indican poco cambio o ausencia de incendio.
+
+## 11. Clasificacion de severidad en P2
+
+El script clasifica el dNBR en 4 clases:
+
+```text
+Clase 1: dNBR < 0.10          Sin cambio o no quemado
+Clase 2: 0.10 <= dNBR < 0.27  Severidad baja
+Clase 3: 0.27 <= dNBR < 0.66  Severidad moderada
+Clase 4: dNBR >= 0.66         Severidad alta
+```
+
+Estas clases son una simplificacion util para el ejercicio. En un trabajo real se podrian ajustar los umbrales segun zona, vegetacion, sensor, validacion de campo y bibliografia.
+
+## 12. Productos generados por P2
+
+El ejercicio 2 genera:
+
+```text
+p2_nbr_pre.tif
+p2_nbr_post.tif
+p2_dnbr.tif
+p2_severidad_incendio.tif
+p2_resumen_resultados.txt
+p2_panel_visual.png
+```
+
+Descripcion:
+
+- `p2_nbr_pre.tif`: NBR antes del incendio.
+- `p2_nbr_post.tif`: NBR despues del incendio.
+- `p2_dnbr.tif`: diferencia entre NBR pre y NBR post.
+- `p2_severidad_incendio.tif`: mapa clasificado en 4 clases.
+- `p2_resumen_resultados.txt`: estadisticas e interpretacion.
+- `p2_panel_visual.png`: figura con NBR pre, NBR post, dNBR y severidad.
+
+## 13. Requisitos previos
 
 Necesitas:
 
@@ -273,7 +406,7 @@ Necesitas:
 - Credenciales OAuth de Copernicus: `Client ID` y `Client Secret`.
 - QGIS para visualizar los resultados.
 
-## 9. Crear el entorno virtual
+## 14. Crear el entorno virtual
 
 Desde la carpeta del proyecto:
 
@@ -301,7 +434,7 @@ Activar en Windows con PowerShell:
 
 El entorno virtual aisla las librerias de este proyecto para no mezclarlas con las del sistema.
 
-## 10. Instalar dependencias
+## 15. Instalar dependencias
 
 Con el entorno virtual activo:
 
@@ -325,9 +458,9 @@ Funcion de cada libreria:
 - `rasterio`: escribe archivos GeoTIFF con informacion geoespacial.
 - `sentinelhub`: conecta con Copernicus/Sentinel Hub y descarga los datos.
 - `python-dotenv`: carga las credenciales desde `.env`.
-- `matplotlib`: genera el panel visual `p1_panel_visual.png`.
+- `matplotlib`: genera los paneles visuales `p1_panel_visual.png` y `p2_panel_visual.png`.
 
-## 11. Obtener credenciales de Copernicus
+## 16. Obtener credenciales de Copernicus
 
 1. Entra en:
    <https://shapps.dataspace.copernicus.eu/dashboard/>
@@ -340,7 +473,7 @@ Funcion de cada libreria:
 
 Estas credenciales permiten que el programa solicite un token OAuth y descargue datos de Copernicus.
 
-## 12. Configurar el archivo .env
+## 17. Configurar el archivo .env
 
 El archivo `.env` debe estar en la raiz del proyecto.
 
@@ -360,15 +493,30 @@ Reglas:
 
 El proyecto incluye `.gitignore` para evitar que `.env` se suba por accidente.
 
-## 13. Ejecutar la aplicacion
+## 18. Ejecutar la aplicacion
 
 Con el entorno virtual activo:
 
 ```bash
-python ejercicio_p1.py
+python main.py
 ```
 
-El programa pedira:
+El menu principal permite elegir:
+
+```text
+1. P1 - Sentinel-2 L2A, NDVI y composiciones RGB
+2. P2 - Deteccion de cambios post-incendio con dNBR
+0. Salir
+```
+
+Tambien se puede ejecutar cada practica por separado:
+
+```bash
+python ejercicio_p1.py
+python ejercicio_p2.py
+```
+
+Para P1, el programa pedira:
 
 - oeste / longitud minima,
 - sur / latitud minima,
@@ -378,6 +526,25 @@ El programa pedira:
 - fecha de fin,
 - ancho en pixeles,
 - alto en pixeles.
+
+Para P2, el programa pedira:
+
+- oeste / longitud minima,
+- sur / latitud minima,
+- este / longitud maxima,
+- norte / latitud maxima,
+- rango temporal pre-incendio,
+- rango temporal post-incendio,
+- ancho en pixeles,
+- alto en pixeles.
+
+Los valores por defecto de P2 corresponden al caso de referencia:
+
+```text
+Bounding box: 16.52, 43.45, 16.78, 43.58
+PRE: 2018-07-05 a 2018-07-10
+POST: 2018-07-20 a 2018-07-25
+```
 
 Si pulsas `Enter`, usa el valor por defecto mostrado entre corchetes.
 
@@ -396,7 +563,7 @@ Ancho de salida en pixeles [512]: 512
 Alto de salida en pixeles [512]: 512
 ```
 
-## 14. Coordenadas: bounding box
+## 19. Coordenadas: bounding box
 
 El area de estudio se define como un rectangulo geografico llamado `bounding box`.
 
@@ -431,7 +598,7 @@ Norte = 37.04
 
 Conviene empezar con areas pequenas. Si el area es muy grande o la salida tiene muchos pixeles, la descarga sera mas lenta y puede consumir mas recursos.
 
-## 15. Fechas de consulta
+## 20. Fechas de consulta
 
 Las fechas se introducen en formato:
 
@@ -452,7 +619,7 @@ La fecha de inicio debe ser anterior a la fecha de fin. No conviene usar el mism
 
 El script solicita escenas con un maximo aproximado de nubosidad del 30% y usa el criterio de menor nubosidad disponible dentro del intervalo.
 
-## 16. Tamano de salida
+## 21. Tamano de salida
 
 El programa pide ancho y alto en pixeles.
 
@@ -469,11 +636,11 @@ Un tamano mayor da mas detalle, pero tambien aumenta:
 - tamano de los archivos,
 - consumo de cuota.
 
-## 17. Explicacion del codigo
+## 22. Explicacion del codigo
 
 El script se organiza en funciones con prefijo `ft_`.
 
-### 17.1 ft_inicializar_api()
+### 22.1 ft_inicializar_api()
 
 Esta funcion:
 
@@ -495,7 +662,7 @@ Endpoint de autenticacion:
 https://identity.dataspace.copernicus.eu/auth/realms/CDSE/protocol/openid-connect/token
 ```
 
-### 17.2 ft_pedir_parametros_usuario()
+### 22.2 ft_pedir_parametros_usuario()
 
 Pide al usuario:
 
@@ -505,7 +672,7 @@ Pide al usuario:
 
 Tambien valida que las coordenadas sean coherentes.
 
-### 17.3 ft_ejecutar_practica_p1()
+### 22.3 ft_ejecutar_practica_p1()
 
 Es la funcion principal de procesamiento.
 
@@ -516,7 +683,7 @@ Hace cuatro tareas:
 3. Calcula NDVI.
 4. Exporta los GeoTIFF.
 
-### 17.4 Evalscript
+### 22.4 Evalscript
 
 El `evalscript` indica a la API que bandas queremos:
 
@@ -540,7 +707,7 @@ La salida tiene cuatro canales en este orden:
 B02, B03, B04, B08
 ```
 
-### 17.5 Separacion de bandas
+### 22.5 Separacion de bandas
 
 La matriz descargada tiene esta forma:
 
@@ -557,7 +724,7 @@ banda_rojo = matriz_p1[:, :, 2]
 banda_nir = matriz_p1[:, :, 3]
 ```
 
-### 17.6 Calculo del NDVI
+### 22.6 Calculo del NDVI
 
 El calculo se realiza con `numpy`:
 
@@ -573,7 +740,7 @@ matriz_ndvi = np.divide(
 
 Se usa `np.divide()` con `where` para evitar divisiones por cero.
 
-### 17.7 Exportacion GeoTIFF
+### 22.7 Exportacion GeoTIFF
 
 Los resultados se guardan con `rasterio`.
 
@@ -587,7 +754,7 @@ Metadatos principales:
 
 El `transform` es importante porque permite que QGIS coloque el raster en su posicion geografica real.
 
-## 18. Visualizar resultados en QGIS
+## 23. Visualizar resultados en QGIS
 
 Para abrir QGIS en este equipo se puede usar:
 
@@ -603,7 +770,7 @@ o desde la carpeta del proyecto:
 
 Estos lanzadores evitan que QGIS herede el entorno virtual de Python del proyecto.
 
-### 18.1 Cargar archivos
+### 23.1 Cargar archivos
 
 1. Abre QGIS.
 2. Arrastra al mapa:
@@ -616,7 +783,7 @@ p1_falso_color.tif
 
 3. Comprueba que las capas se colocan correctamente.
 
-### 18.2 Simbologia del NDVI
+### 23.2 Simbologia del NDVI
 
 El archivo `p1_resultado_ndvi.tif` es monobanda, por eso necesita pseudocolor.
 
@@ -640,7 +807,7 @@ Interpretacion visual:
 - Rojo/naranja: suelo desnudo, zonas urbanas o vegetacion escasa.
 - Valores negativos: agua, sombras o nubes.
 
-## 19. Comprobaciones realizadas
+## 24. Comprobaciones realizadas
 
 Se comprobo que:
 
@@ -656,9 +823,9 @@ Se comprobo que:
 - los archivos tienen CRS `EPSG:4326`,
 - QGIS queda instalado y puede abrir los GeoTIFF.
 
-## 20. Errores frecuentes
+## 25. Errores frecuentes
 
-### 20.1 Credenciales no encontradas
+### 25.1 Credenciales no encontradas
 
 Mensaje:
 
@@ -672,7 +839,7 @@ Solucion:
 - revisa que las variables tienen el nombre correcto,
 - revisa que las claves no estan vacias.
 
-### 20.2 Error de conexion
+### 25.2 Error de conexion
 
 Mensaje:
 
@@ -687,7 +854,7 @@ Solucion:
 - revisa que Copernicus este disponible,
 - vuelve a intentar mas tarde.
 
-### 20.3 Resultado con todas las bandas a cero
+### 25.3 Resultado con todas las bandas a cero
 
 Mensaje:
 
@@ -710,7 +877,7 @@ Solucion:
 - reduce o cambia el bounding box,
 - prueba otro mes.
 
-### 20.4 Coordenadas invertidas
+### 25.4 Coordenadas invertidas
 
 Mensaje:
 
@@ -722,7 +889,7 @@ Solucion:
 
 - usa el orden correcto: oeste, sur, este, norte.
 
-### 20.5 QGIS muestra error de SIP o Python
+### 25.5 QGIS muestra error de SIP o Python
 
 Puede ocurrir si QGIS se abre heredando el entorno virtual `venv`.
 
@@ -738,7 +905,7 @@ o:
 ./abrir_qgis_limpio.sh
 ```
 
-## 21. Guion para explicar en clase
+## 26. Guion para explicar en clase
 
 En esta practica se ha creado una aplicacion en Python para procesar imagenes Sentinel-2. Primero se prepara un entorno virtual y se instalan las librerias necesarias. Despues se configuran las credenciales de Copernicus en un archivo `.env`, que permite conectarse de forma segura a la API.
 
@@ -748,7 +915,9 @@ La API devuelve cuatro bandas: azul, verde, rojo e infrarrojo cercano. Con rojo,
 
 Los resultados se exportan como GeoTIFF usando `rasterio`, conservando sistema de coordenadas y transformacion espacial. Esto permite abrirlos directamente en QGIS, donde el NDVI se interpreta mejor aplicando una simbologia de pseudocolor con valores entre -1 y 1.
 
-## 22. Comandos principales
+El segundo ejercicio descarga dos imagenes por API: una anterior y otra posterior al incendio. Para ello usa las bandas B08 y B12 de Sentinel-2 L2A, calcula NBR en ambas fechas y despues obtiene dNBR. El dNBR permite estimar la severidad potencial del incendio: cuanto mas alto es el valor, mayor perdida relativa de vegetacion se interpreta. Finalmente se clasifica el resultado en cuatro clases: sin cambio, severidad baja, severidad moderada y severidad alta.
+
+## 27. Comandos principales
 
 Crear entorno:
 
@@ -768,10 +937,22 @@ Instalar dependencias:
 pip install -r requirements.txt
 ```
 
-Ejecutar practica:
+Ejecutar menu principal:
+
+```bash
+python main.py
+```
+
+Ejecutar P1 directamente:
 
 ```bash
 python ejercicio_p1.py
+```
+
+Ejecutar P2 directamente:
+
+```bash
+python ejercicio_p2.py
 ```
 
 Abrir QGIS limpio:
@@ -783,5 +964,5 @@ qgis-limpio
 Comprobar sintaxis:
 
 ```bash
-python -m py_compile ejercicio_p1.py
+python -m py_compile main.py ejercicio_p1.py ejercicio_p2.py
 ```

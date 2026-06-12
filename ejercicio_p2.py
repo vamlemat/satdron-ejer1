@@ -1,0 +1,549 @@
+import os
+
+os.environ.setdefault("MPLCONFIGDIR", "/tmp/matplotlib")
+
+import matplotlib
+
+matplotlib.use("Agg")
+import matplotlib.colors as mcolors
+import matplotlib.pyplot as plt
+import numpy as np
+import rasterio
+from rasterio.transform import from_bounds
+from sentinelhub import BBox, CRS, DataCollection, MimeType, MosaickingOrder, SentinelHubRequest
+
+from ejercicio_p1 import (
+    TAMANO_SALIDA_DEFECTO,
+    ft_formatear_porcentaje,
+    ft_inicializar_api,
+    ft_pedir_entero,
+    ft_pedir_fecha,
+    ft_pedir_float,
+    ft_validar_rango_fechas,
+)
+
+
+BANDA_NIR_DEFECTO = 1
+BANDA_SWIR2_DEFECTO = 2
+COORDENADAS_BBOX_P2_DEFECTO = [16.52, 43.45, 16.78, 43.58]
+RANGO_PRE_INCENDIO_DEFECTO = ("2018-07-05", "2018-07-10")
+RANGO_POST_INCENDIO_DEFECTO = ("2018-07-20", "2018-07-25")
+MAX_NUBOSIDAD_P2 = 1.0
+
+CLASES_SEVERIDAD = [
+    {
+        "valor": 1,
+        "nombre": "Sin cambio o no quemado",
+        "minimo": -np.inf,
+        "maximo": 0.10,
+        "color": "#2ca25f",
+    },
+    {
+        "valor": 2,
+        "nombre": "Severidad baja",
+        "minimo": 0.10,
+        "maximo": 0.27,
+        "color": "#ffeda0",
+    },
+    {
+        "valor": 3,
+        "nombre": "Severidad moderada",
+        "minimo": 0.27,
+        "maximo": 0.66,
+        "color": "#feb24c",
+    },
+    {
+        "valor": 4,
+        "nombre": "Severidad alta",
+        "minimo": 0.66,
+        "maximo": np.inf,
+        "color": "#de2d26",
+    },
+]
+
+
+def ft_pedir_ruta_imagen(mensaje):
+    """
+    Solicita una ruta de imagen raster existente.
+    """
+    while True:
+        ruta = input(f"{mensaje}: ").strip().strip('"').strip("'")
+        if os.path.isfile(ruta):
+            return ruta
+        print("[AVISO] No se encontro el archivo. Revisa la ruta e intentalo de nuevo.")
+
+
+def ft_pedir_parametros_usuario_p2_api():
+    """
+    Solicita coordenadas y rangos temporales para descargar imagenes por API.
+    """
+    print("\nP2 - Deteccion de cambios post-incendio con dNBR")
+    print("Se descargaran dos imagenes Sentinel-2 L2A por API:")
+    print("- imagen PRE-incendio")
+    print("- imagen POST-incendio")
+    print("\nIntroduce las coordenadas del area en grados decimales (WGS84).")
+    print("Orden esperado: oeste, sur, este, norte.")
+
+    oeste = ft_pedir_float("Oeste / longitud minima", COORDENADAS_BBOX_P2_DEFECTO[0])
+    sur = ft_pedir_float("Sur / latitud minima", COORDENADAS_BBOX_P2_DEFECTO[1])
+    este = ft_pedir_float("Este / longitud maxima", COORDENADAS_BBOX_P2_DEFECTO[2])
+    norte = ft_pedir_float("Norte / latitud maxima", COORDENADAS_BBOX_P2_DEFECTO[3])
+
+    if oeste >= este:
+        raise ValueError("La coordenada oeste debe ser menor que la coordenada este.")
+    if sur >= norte:
+        raise ValueError("La coordenada sur debe ser menor que la coordenada norte.")
+    if not -180 <= oeste <= 180 or not -180 <= este <= 180:
+        raise ValueError("Las longitudes deben estar entre -180 y 180.")
+    if not -90 <= sur <= 90 or not -90 <= norte <= 90:
+        raise ValueError("Las latitudes deben estar entre -90 y 90.")
+
+    print("\nRango temporal PRE-incendio")
+    pre_inicio = ft_pedir_fecha("Fecha inicio PRE YYYY-MM-DD", RANGO_PRE_INCENDIO_DEFECTO[0])
+    pre_fin = ft_pedir_fecha("Fecha fin PRE YYYY-MM-DD", RANGO_PRE_INCENDIO_DEFECTO[1])
+    ft_validar_rango_fechas(pre_inicio, pre_fin)
+
+    print("\nRango temporal POST-incendio")
+    post_inicio = ft_pedir_fecha("Fecha inicio POST YYYY-MM-DD", RANGO_POST_INCENDIO_DEFECTO[0])
+    post_fin = ft_pedir_fecha("Fecha fin POST YYYY-MM-DD", RANGO_POST_INCENDIO_DEFECTO[1])
+    ft_validar_rango_fechas(post_inicio, post_fin)
+
+    ancho = ft_pedir_entero("Ancho de salida en pixeles", TAMANO_SALIDA_DEFECTO[0])
+    alto = ft_pedir_entero("Alto de salida en pixeles", TAMANO_SALIDA_DEFECTO[1])
+
+    limites_bbox = BBox(bbox=[oeste, sur, este, norte], crs=CRS.WGS84)
+    return limites_bbox, (pre_inicio, pre_fin), (post_inicio, post_fin), (ancho, alto)
+
+
+def ft_descargar_bandas_nbr(configuracion_api, limites_bbox, rango_fechas, tamano_salida):
+    """
+    Descarga B08 y B12 de Sentinel-2 L2A para calcular NBR.
+    """
+    evalscript = """
+//VERSION=3
+function setup() {
+  return {
+    input: ["B08", "B12", "dataMask"],
+    output: { bands: 3, sampleType: "FLOAT32" }
+  };
+}
+
+function evaluatePixel(samples) {
+  return [samples.B08, samples.B12, samples.dataMask];
+}
+"""
+
+    peticion = SentinelHubRequest(
+        evalscript=evalscript,
+        input_data=[
+            SentinelHubRequest.input_data(
+                data_collection=DataCollection.SENTINEL2_L2A.define_from(
+                    "s2l2a_cdse",
+                    service_url=configuracion_api.sh_base_url,
+                ),
+                time_interval=rango_fechas,
+                maxcc=MAX_NUBOSIDAD_P2,
+                mosaicking_order=MosaickingOrder.LEAST_CC,
+            )
+        ],
+        responses=[SentinelHubRequest.output_response("default", MimeType.TIFF)],
+        bbox=limites_bbox,
+        size=tamano_salida,
+        config=configuracion_api,
+    )
+
+    datos = peticion.get_data()
+    if not datos:
+        raise ValueError("La API no devolvio datos para el rango indicado.")
+
+    matriz = datos[0].astype("float32")
+    data_mask = matriz[:, :, 2]
+    if np.nansum(data_mask) == 0:
+        raise ValueError(
+            "La descarga no contiene pixeles validos segun dataMask. "
+            "Prueba a ampliar fechas o revisar el area de estudio."
+        )
+
+    return matriz[:, :, 0], matriz[:, :, 1]
+
+
+def ft_leer_bandas_nbr_desde_imagen(
+    ruta_imagen,
+    banda_nir=BANDA_NIR_DEFECTO,
+    banda_swir2=BANDA_SWIR2_DEFECTO,
+):
+    """
+    Lee B08 y B12 desde una imagen multibanda local.
+    """
+    dataset = rasterio.open(ruta_imagen)
+
+    if dataset.count < max(banda_nir, banda_swir2):
+        dataset.close()
+        raise ValueError(
+            f"La imagen {ruta_imagen} tiene {dataset.count} banda(s), "
+            f"pero se necesitan al menos {max(banda_nir, banda_swir2)}."
+        )
+
+    banda_nir_matriz = dataset.read(banda_nir).astype("float32")
+    banda_swir2_matriz = dataset.read(banda_swir2).astype("float32")
+    perfil = dataset.profile.copy()
+    forma = (dataset.height, dataset.width)
+    crs = dataset.crs
+    transform = dataset.transform
+    bounds = dataset.bounds
+    dataset.close()
+
+    return {
+        "nir": banda_nir_matriz,
+        "swir2": banda_swir2_matriz,
+        "perfil": perfil,
+        "forma": forma,
+        "crs": crs,
+        "transform": transform,
+        "bounds": bounds,
+    }
+
+
+def ft_validar_compatibilidad_imagenes(datos_pre, datos_post):
+    """
+    Comprueba que ambas imagenes se puedan comparar pixel a pixel.
+    """
+    if datos_pre["forma"] != datos_post["forma"]:
+        raise ValueError(
+            "Las imagenes PRE y POST no tienen el mismo tamano. "
+            "Deben estar recortadas y remuestreadas a la misma malla."
+        )
+
+    if datos_pre["crs"] != datos_post["crs"]:
+        raise ValueError("Las imagenes PRE y POST no tienen el mismo CRS.")
+
+    if datos_pre["transform"] != datos_post["transform"]:
+        raise ValueError(
+            "Las imagenes PRE y POST no tienen la misma georreferenciacion. "
+            "Deben coincidir para poder comparar pixel a pixel."
+        )
+
+
+def ft_calcular_indice_normalizado(banda_a, banda_b):
+    """
+    Calcula (A - B) / (A + B) evitando divisiones por cero.
+    """
+    denominador = banda_a + banda_b
+    return np.divide(
+        banda_a - banda_b,
+        denominador,
+        out=np.zeros_like(banda_a, dtype="float32"),
+        where=denominador != 0,
+    )
+
+
+def ft_calcular_estadisticas_genericas(matriz):
+    valores_validos = matriz[np.isfinite(matriz)]
+    if valores_validos.size == 0:
+        raise ValueError("No hay valores validos para calcular estadisticas.")
+
+    return {
+        "pixeles_validos": int(valores_validos.size),
+        "minimo": float(valores_validos.min()),
+        "maximo": float(valores_validos.max()),
+        "media": float(valores_validos.mean()),
+        "mediana": float(np.median(valores_validos)),
+        "percentil_10": float(np.percentile(valores_validos, 10)),
+        "percentil_25": float(np.percentile(valores_validos, 25)),
+        "percentil_75": float(np.percentile(valores_validos, 75)),
+        "percentil_90": float(np.percentile(valores_validos, 90)),
+    }
+
+
+def ft_clasificar_severidad_dnbr(matriz_dnbr):
+    """
+    Clasifica dNBR en cuatro clases de severidad.
+    """
+    clases = np.zeros_like(matriz_dnbr, dtype="uint8")
+    for clase in CLASES_SEVERIDAD:
+        mascara = (matriz_dnbr >= clase["minimo"]) & (matriz_dnbr < clase["maximo"])
+        clases[mascara] = clase["valor"]
+    return clases
+
+
+def ft_resumir_clases_severidad(matriz_clases):
+    total = matriz_clases.size
+    resumen = []
+    for clase in CLASES_SEVERIDAD:
+        pixeles = int((matriz_clases == clase["valor"]).sum())
+        porcentaje = pixeles * 100 / total
+        resumen.append(
+            {
+                "valor": clase["valor"],
+                "nombre": clase["nombre"],
+                "pixeles": pixeles,
+                "porcentaje": porcentaje,
+            }
+        )
+    return resumen
+
+
+def ft_exportar_geotiff_monobanda(ruta_salida, matriz, perfil_base, dtype="float32"):
+    perfil = perfil_base.copy()
+    perfil.update(
+        driver="GTiff",
+        dtype=dtype,
+        count=1,
+        nodata=None,
+    )
+    with rasterio.open(ruta_salida, "w", **perfil) as destino:
+        destino.write(matriz.astype(dtype), 1)
+    print(f"[OK] GeoTIFF exportado: {ruta_salida}")
+
+
+def ft_crear_perfil_desde_bbox(matriz, limites_bbox, dtype="float32"):
+    alto, ancho = matriz.shape
+    oeste, sur, este, norte = tuple(limites_bbox)
+    return {
+        "driver": "GTiff",
+        "dtype": dtype,
+        "nodata": None,
+        "width": ancho,
+        "height": alto,
+        "count": 1,
+        "crs": CRS.WGS84.pyproj_crs(),
+        "transform": from_bounds(oeste, sur, este, norte, ancho, alto),
+    }
+
+
+def ft_generar_resumen_p2(
+    estadisticas_pre,
+    estadisticas_post,
+    estadisticas_dnbr,
+    resumen_clases,
+    limites_bbox,
+    rango_pre,
+    rango_post,
+    tamano_salida,
+    ruta_salida="p2_resumen_resultados.txt",
+):
+    oeste, sur, este, norte = tuple(limites_bbox)
+    ancho, alto = tamano_salida
+
+    lineas = [
+        "RESUMEN FINAL DE RESULTADOS - PRACTICA P2",
+        "=" * 48,
+        "",
+        "PARAMETROS DE ENTRADA",
+        "-" * 22,
+        "Metodo: descarga por API de dos imagenes Sentinel-2 L2A PRE y POST incendio",
+        "Coleccion: s2l2a_cdse",
+        "Bandas usadas: B08 (NIR) y B12 (SWIR2)",
+        f"Filtro de nubosidad maxcc: {MAX_NUBOSIDAD_P2}",
+        f"Bounding box WGS84: oeste={oeste}, sur={sur}, este={este}, norte={norte}",
+        f"Rango PRE-incendio: {rango_pre[0]} a {rango_pre[1]}",
+        f"Rango POST-incendio: {rango_post[0]} a {rango_post[1]}",
+        f"Tamano: {ancho} x {alto} pixeles",
+        "",
+        "FORMULAS",
+        "-" * 8,
+        "NBR = (B08 - B12) / (B08 + B12)",
+        "dNBR = NBR_pre - NBR_post",
+        "",
+        "ARCHIVOS GENERADOS",
+        "-" * 18,
+        "p2_nbr_pre.tif",
+        "p2_nbr_post.tif",
+        "p2_dnbr.tif",
+        "p2_severidad_incendio.tif",
+        "p2_resumen_resultados.txt",
+        "p2_panel_visual.png",
+        "",
+        "ESTADISTICAS NBR PRE-INCENDIO",
+        "-" * 31,
+        f"Minimo: {estadisticas_pre['minimo']:.6f}",
+        f"Maximo: {estadisticas_pre['maximo']:.6f}",
+        f"Media: {estadisticas_pre['media']:.6f}",
+        f"Mediana: {estadisticas_pre['mediana']:.6f}",
+        "",
+        "ESTADISTICAS NBR POST-INCENDIO",
+        "-" * 32,
+        f"Minimo: {estadisticas_post['minimo']:.6f}",
+        f"Maximo: {estadisticas_post['maximo']:.6f}",
+        f"Media: {estadisticas_post['media']:.6f}",
+        f"Mediana: {estadisticas_post['mediana']:.6f}",
+        "",
+        "ESTADISTICAS dNBR",
+        "-" * 18,
+        f"Minimo: {estadisticas_dnbr['minimo']:.6f}",
+        f"Maximo: {estadisticas_dnbr['maximo']:.6f}",
+        f"Media: {estadisticas_dnbr['media']:.6f}",
+        f"Mediana: {estadisticas_dnbr['mediana']:.6f}",
+        f"Percentil 10: {estadisticas_dnbr['percentil_10']:.6f}",
+        f"Percentil 25: {estadisticas_dnbr['percentil_25']:.6f}",
+        f"Percentil 75: {estadisticas_dnbr['percentil_75']:.6f}",
+        f"Percentil 90: {estadisticas_dnbr['percentil_90']:.6f}",
+        "",
+        "CLASIFICACION DE SEVERIDAD",
+        "-" * 28,
+    ]
+
+    for clase in resumen_clases:
+        lineas.append(
+            f"Clase {clase['valor']} - {clase['nombre']}: "
+            f"{clase['pixeles']} pixeles ({ft_formatear_porcentaje(clase['porcentaje'])})"
+        )
+
+    lineas.extend(
+        [
+            "",
+            "INTERPRETACION",
+            "-" * 14,
+            "Valores dNBR mas altos indican mayor perdida relativa de vegetacion y mayor severidad potencial.",
+            "La clase 1 representa ausencia de cambio fuerte o zonas no quemadas.",
+            "La clase 4 representa las zonas con mayor severidad potencial del incendio.",
+        ]
+    )
+
+    texto = "\n".join(lineas)
+    print("\n" + texto)
+
+    with open(ruta_salida, "w", encoding="utf-8") as archivo:
+        archivo.write(texto)
+        archivo.write("\n")
+
+    print(f"\n[OK] Resumen P2 exportado: {ruta_salida}")
+
+
+def ft_generar_panel_visual_p2(
+    nbr_pre,
+    nbr_post,
+    dnbr,
+    severidad,
+    estadisticas_dnbr,
+    ruta_salida="p2_panel_visual.png",
+):
+    colores = [clase["color"] for clase in CLASES_SEVERIDAD]
+    nombres = [f"{clase['valor']} - {clase['nombre']}" for clase in CLASES_SEVERIDAD]
+    cmap_clases = mcolors.ListedColormap(colores)
+    norm_clases = mcolors.BoundaryNorm([0.5, 1.5, 2.5, 3.5, 4.5], cmap_clases.N)
+
+    fig, ejes = plt.subplots(2, 2, figsize=(14, 10), constrained_layout=True)
+    fig.suptitle("Practica P2 - dNBR y severidad post-incendio", fontsize=16, fontweight="bold")
+
+    img_pre = ejes[0, 0].imshow(nbr_pre, cmap="BrBG", vmin=-1, vmax=1)
+    ejes[0, 0].set_title("NBR pre-incendio")
+    ejes[0, 0].axis("off")
+    fig.colorbar(img_pre, ax=ejes[0, 0], fraction=0.046, pad=0.04)
+
+    img_post = ejes[0, 1].imshow(nbr_post, cmap="BrBG", vmin=-1, vmax=1)
+    ejes[0, 1].set_title("NBR post-incendio")
+    ejes[0, 1].axis("off")
+    fig.colorbar(img_post, ax=ejes[0, 1], fraction=0.046, pad=0.04)
+
+    img_dnbr = ejes[1, 0].imshow(dnbr, cmap="YlOrRd", vmin=-0.2, vmax=1)
+    ejes[1, 0].set_title("dNBR = NBR pre - NBR post")
+    ejes[1, 0].axis("off")
+    fig.colorbar(img_dnbr, ax=ejes[1, 0], fraction=0.046, pad=0.04)
+
+    img_sev = ejes[1, 1].imshow(severidad, cmap=cmap_clases, norm=norm_clases)
+    ejes[1, 1].set_title("Clasificacion de severidad")
+    ejes[1, 1].axis("off")
+    cbar = fig.colorbar(img_sev, ax=ejes[1, 1], ticks=[1, 2, 3, 4], fraction=0.046, pad=0.04)
+    cbar.ax.set_yticklabels(nombres)
+
+    fig.text(
+        0.5,
+        0.01,
+        (
+            f"dNBR min={estadisticas_dnbr['minimo']:.3f} | "
+            f"media={estadisticas_dnbr['media']:.3f} | "
+            f"max={estadisticas_dnbr['maximo']:.3f}"
+        ),
+        ha="center",
+        fontsize=11,
+    )
+
+    fig.savefig(ruta_salida, dpi=180)
+    plt.close(fig)
+    print(f"[OK] Panel visual P2 exportado: {ruta_salida}")
+
+
+def ft_ejecutar_practica_p2_api(
+    configuracion_api,
+    limites_bbox,
+    rango_pre,
+    rango_post,
+    tamano_salida,
+):
+    """
+    Ejecuta la deteccion de cambios post-incendio descargando PRE y POST por API.
+    """
+    print("[INFO] Descargando bandas PRE-incendio B08 y B12...")
+    pre_nir, pre_swir2 = ft_descargar_bandas_nbr(
+        configuracion_api,
+        limites_bbox,
+        rango_pre,
+        tamano_salida,
+    )
+
+    print("[INFO] Descargando bandas POST-incendio B08 y B12...")
+    post_nir, post_swir2 = ft_descargar_bandas_nbr(
+        configuracion_api,
+        limites_bbox,
+        rango_post,
+        tamano_salida,
+    )
+
+    nbr_pre = ft_calcular_indice_normalizado(pre_nir, pre_swir2)
+    nbr_post = ft_calcular_indice_normalizado(post_nir, post_swir2)
+    dnbr = nbr_pre - nbr_post
+    severidad = ft_clasificar_severidad_dnbr(dnbr)
+
+    estadisticas_pre = ft_calcular_estadisticas_genericas(nbr_pre)
+    estadisticas_post = ft_calcular_estadisticas_genericas(nbr_post)
+    estadisticas_dnbr = ft_calcular_estadisticas_genericas(dnbr)
+    resumen_clases = ft_resumir_clases_severidad(severidad)
+
+    perfil_base = ft_crear_perfil_desde_bbox(nbr_pre, limites_bbox)
+    ft_exportar_geotiff_monobanda("p2_nbr_pre.tif", nbr_pre, perfil_base)
+    ft_exportar_geotiff_monobanda("p2_nbr_post.tif", nbr_post, perfil_base)
+    ft_exportar_geotiff_monobanda("p2_dnbr.tif", dnbr, perfil_base)
+    ft_exportar_geotiff_monobanda(
+        "p2_severidad_incendio.tif",
+        severidad,
+        perfil_base,
+        dtype="uint8",
+    )
+
+    ft_generar_resumen_p2(
+        estadisticas_pre,
+        estadisticas_post,
+        estadisticas_dnbr,
+        resumen_clases,
+        limites_bbox,
+        rango_pre,
+        rango_post,
+        tamano_salida,
+    )
+    ft_generar_panel_visual_p2(
+        nbr_pre,
+        nbr_post,
+        dnbr,
+        severidad,
+        estadisticas_dnbr,
+    )
+
+
+def ft_main_p2():
+    try:
+        sesion_api = ft_inicializar_api()
+        limites_bbox, rango_pre, rango_post, tamano_salida = ft_pedir_parametros_usuario_p2_api()
+        ft_ejecutar_practica_p2_api(
+            sesion_api,
+            limites_bbox,
+            rango_pre,
+            rango_post,
+            tamano_salida,
+        )
+    except Exception as error_programa:
+        print(f"\n[ERROR CRITICO] {error_programa}")
+
+
+if __name__ == "__main__":
+    ft_main_p2()
