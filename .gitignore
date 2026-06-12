@@ -1,0 +1,7 @@
+.env
+venv/
+.venv/
+__pycache__/
+*.py[cod]
+*.tif
+qgis_probe.py

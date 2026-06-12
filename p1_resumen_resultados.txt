@@ -1,0 +1,115 @@
+RESUMEN FINAL DE RESULTADOS - PRACTICA P1
+================================================
+
+PARAMETROS DE ENTRADA
+----------------------
+Nivel de procesamiento: Sentinel-2 L2A
+Coleccion: s2l2a_cdse
+Bounding box WGS84: oeste=-3.47, sur=36.76, este=-3.45, norte=36.77
+Rango de fechas: 2026-05-01 a 2026-06-01
+Tamano de salida: 1024 x 1024 pixeles
+
+ARCHIVOS GENERADOS
+------------------
+p1_resultado_ndvi.tif
+p1_color_verdadero.tif
+p1_falso_color.tif
+p1_resumen_resultados.txt
+
+VALORES DE COLOR VERDADERO
+---------------------------
+Canal Rojo = B04 (reflectancia en rojo visible)
+  Minimo: 0.010300
+  Maximo: 0.762300
+  Media: 0.150145
+  Mediana: 0.138100
+  Percentil 10: 0.081700
+  Percentil 90: 0.219600
+Canal Verde = B03 (reflectancia en verde visible)
+  Minimo: 0.031900
+  Maximo: 0.781700
+  Media: 0.129534
+  Mediana: 0.115100
+  Percentil 10: 0.070200
+  Percentil 90: 0.194700
+Canal Azul = B02 (reflectancia en azul visible)
+  Minimo: 0.000000
+  Maximo: 0.794400
+  Media: 0.099630
+  Mediana: 0.083100
+  Percentil 10: 0.039900
+  Percentil 90: 0.168100
+
+LECTURA DEL COLOR VERDADERO
+-----------------------------
+Esta composicion usa bandas visibles: B04, B03 y B02.
+Se parece a una fotografia normal y ayuda a reconocer visualmente suelo, caminos, nubes, agua y zonas urbanas.
+Valores mas altos en un canal significan mayor reflectancia en esa banda visible.
+
+VALORES DE FALSO COLOR
+----------------------
+Canal Rojo = B08 (infrarrojo cercano asignado al canal rojo)
+  Minimo: 0.070100
+  Maximo: 0.746100
+  Media: 0.278773
+  Mediana: 0.272000
+  Percentil 10: 0.222300
+  Percentil 90: 0.339600
+Canal Verde = B04 (rojo visible asignado al canal verde)
+  Minimo: 0.010300
+  Maximo: 0.762300
+  Media: 0.150145
+  Mediana: 0.138100
+  Percentil 10: 0.081700
+  Percentil 90: 0.219600
+Canal Azul = B03 (verde visible asignado al canal azul)
+  Minimo: 0.031900
+  Maximo: 0.781700
+  Media: 0.129534
+  Mediana: 0.115100
+  Percentil 10: 0.070200
+  Percentil 90: 0.194700
+
+LECTURA DEL FALSO COLOR
+-----------------------
+Esta composicion coloca el infrarrojo cercano B08 en el canal rojo.
+La vegetacion sana suele destacar porque refleja mas en B08 que en B04.
+Si la media de B08 es claramente superior a la de B04, suele haber mas respuesta vegetal.
+Si B08 y B04 son parecidos o bajos, la vegetacion suele ser escasa o estar poco activa.
+
+ESTADISTICAS NDVI
+------------------
+Pixeles validos: 1048576
+NDVI minimo: -0.075350
+NDVI maximo: 0.956123
+NDVI medio: 0.319142
+NDVI mediana: 0.309122
+Percentil 10: 0.132353
+Percentil 25: 0.213821
+Percentil 75: 0.418628
+Percentil 90: 0.518362
+
+DISTRIBUCION POR RANGOS
+------------------------
+NDVI < 0: 17596 pixeles (1.68%)
+  Interpretacion: agua, sombras, nubes o superficies sin vegetacion
+0 <= NDVI < 0.2: 210293 pixeles (20.06%)
+  Interpretacion: suelo desnudo, urbano o vegetacion muy escasa
+0.2 <= NDVI < 0.4: 522594 pixeles (49.84%)
+  Interpretacion: vegetacion moderada o posiblemente estresada
+NDVI >= 0.4: 298093 pixeles (28.43%)
+  Interpretacion: vegetacion densa o sana
+
+ADVERTENCIAS
+------------
+No se detectan bandas completamente vacias en el resumen estadistico.
+
+INTERPRETACION GLOBAL
+---------------------
+Segun el NDVI medio, predomina vegetacion moderada o posiblemente estresada.
+
+LECTURA RAPIDA
+--------------
+Valores altos indican mayor presencia o vigor de vegetacion.
+Valores bajos indican suelo desnudo, urbano, vegetacion escasa o superficies no vegetales.
+Valores negativos suelen asociarse a agua, sombras o nubes.
