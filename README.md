@@ -169,6 +169,7 @@ p1_color_verdadero.tif
 p1_falso_color.tif
 p1_resumen_resultados.txt
 p1_panel_visual.png
+p1_mapa_interactivo.html
 ```
 
 ### 6.1 p1_resultado_ndvi.tif
@@ -246,6 +247,21 @@ Este archivo es util para una exposicion en clase porque permite ver en una sola
 - como cambia al usar infrarrojo cercano,
 - donde aparecen valores altos o bajos de NDVI,
 - como se distribuyen numericamente los valores del indice.
+
+### 6.6 p1_mapa_interactivo.html
+
+Mapa interactivo en formato HTML generado mediante la libreria `folium`.
+Se abrira automaticamente en tu navegador web al terminar el script.
+
+Contiene:
+- **Mapa base de satelite** (Google Earth / Esri World Imagery) para ver la zona real.
+- **Control de capas** en la esquina superior derecha para encender/apagar distintas visualizaciones:
+  - Color Verdadero (RGB).
+  - Falso Color (Infrarrojo).
+  - NDVI (Indice de Vegetacion).
+- **Leyendas dinamicas**: Cuando cambias de capa, la leyenda de la esquina inferior derecha cambia dinamicamente para explicarte que significan los colores de la capa que tienes activa.
+
+Es la herramienta perfecta para la **exposicion en clase**, ya que te permite empezar con el contexto real del mapa y encender capa por capa explicando su significado.
 
 ## 7. Que es el NDVI
 
@@ -385,6 +401,7 @@ p2_dnbr.tif
 p2_severidad_incendio.tif
 p2_resumen_resultados.txt
 p2_panel_visual.png
+p2_mapa_interactivo.html
 ```
 
 Descripcion:
@@ -394,7 +411,19 @@ Descripcion:
 - `p2_dnbr.tif`: diferencia entre NBR pre y NBR post.
 - `p2_severidad_incendio.tif`: mapa clasificado en 4 clases.
 - `p2_resumen_resultados.txt`: estadisticas e interpretacion.
-- `p2_panel_visual.png`: figura con NBR pre, NBR post, dNBR y severidad.
+- `p2_panel_visual.png`: figura estatica limpia con NBR pre, NBR post, dNBR y severidad.
+- `p2_mapa_interactivo.html`: mapa web interactivo multicapa con leyendas dinamicas.
+
+### 12.1 El Mapa Interactivo (p2_mapa_interactivo.html)
+
+Igual que en el ejercicio 1, se genera un archivo HTML que se abre en tu navegador.
+Tiene un fondo de satelite real, e incluye en el panel de control de capas:
+- NBR PRE-incendio
+- NBR POST-incendio
+- dNBR (Diferencia NBR)
+- Clasificacion de Severidad
+
+Al igual que en la P1, **las leyendas son dinamicas**. Si enciendes el dNBR, veras la leyenda de -0.2 a 1.0 (amarillo a rojo oscuro). Si enciendes la Severidad, aparecera la leyenda con las 4 clases. Ideal para hacer zoom y mostrar los resultados georreferenciados al detalle durante tu presentacion.
 
 ## 13. Requisitos previos
 
@@ -450,6 +479,8 @@ rasterio
 sentinelhub
 python-dotenv
 matplotlib
+contextily
+folium
 ```
 
 Funcion de cada libreria:
@@ -458,7 +489,8 @@ Funcion de cada libreria:
 - `rasterio`: escribe archivos GeoTIFF con informacion geoespacial.
 - `sentinelhub`: conecta con Copernicus/Sentinel Hub y descarga los datos.
 - `python-dotenv`: carga las credenciales desde `.env`.
-- `matplotlib`: genera los paneles visuales `p1_panel_visual.png` y `p2_panel_visual.png`.
+- `matplotlib`: genera los paneles visuales estaticos.
+- `contextily` y `folium`: generan los mapas interactivos en HTML con capas superpuestas, mapas base y leyendas dinamicas.
 
 ## 16. Obtener credenciales de Copernicus
 
@@ -916,6 +948,8 @@ La API devuelve cuatro bandas: azul, verde, rojo e infrarrojo cercano. Con rojo,
 Los resultados se exportan como GeoTIFF usando `rasterio`, conservando sistema de coordenadas y transformacion espacial. Esto permite abrirlos directamente en QGIS, donde el NDVI se interpreta mejor aplicando una simbologia de pseudocolor con valores entre -1 y 1.
 
 El segundo ejercicio descarga dos imagenes por API: una anterior y otra posterior al incendio. Para ello usa las bandas B08 y B12 de Sentinel-2 L2A, calcula NBR en ambas fechas y despues obtiene dNBR. El dNBR permite estimar la severidad potencial del incendio: cuanto mas alto es el valor, mayor perdida relativa de vegetacion se interpreta. Finalmente se clasifica el resultado en cuatro clases: sin cambio, severidad baja, severidad moderada y severidad alta.
+
+Para exponer y defender este proyecto en clase, utiliza los **Mapas Interactivos**. Al finalizar los scripts, se abrira automaticamente en el navegador el mapa correspondiente (`p1_mapa_interactivo.html` o `p2_mapa_interactivo.html`). Empieza mostrando el mapa base de satelite para contextualizar la zona real. Luego, abre el control de capas arriba a la derecha y ve activando los distintos analisis (Color Verdadero, Falso Color, NDVI, Severidad). Las leyendas se actualizaran automaticamente abajo a la derecha, permitiendote justificar de manera super visual y profesional lo que significa cada color y cada nivel de severidad o vegetacion obtenida.
 
 ## 27. Comandos principales
 
