@@ -585,9 +585,17 @@ def ft_generar_panel_visual(
 
     print(f"[OK] Panel visual exportado: {ruta_salida}")
 
-def ft_generar_mapa_interactivo_p1(matriz_ndvi, limites_bbox, ruta_salida="p1_mapa_interactivo.html"):
+def ft_generar_mapa_interactivo_p1(
+    banda_azul,
+    banda_verde,
+    banda_rojo,
+    banda_nir,
+    matriz_ndvi,
+    limites_bbox,
+    ruta_salida="p1_mapa_interactivo.html"
+):
     """
-    Genera un mapa HTML interactivo con el NDVI sobre una capa base.
+    Genera un mapa HTML interactivo con Color Verdadero, Falso Color y NDVI, mas leyendas.
     """
     oeste, sur, este, norte = tuple(limites_bbox)
     centro_lat = (sur + norte) / 2.0
@@ -603,43 +611,137 @@ def ft_generar_mapa_interactivo_p1(matriz_ndvi, limites_bbox, ruta_salida="p1_ma
         overlay=False,
         control=True
     ).add_to(m)
+
+    # Convertir bandas RGB a matriz visual
+    color_verdadero = ft_crear_rgb_visual(banda_rojo, banda_verde, banda_azul)
+    falso_color = ft_crear_rgb_visual(banda_nir, banda_rojo, banda_verde)
     
-    fig, ax = plt.subplots(figsize=(matriz_ndvi.shape[1]/100, matriz_ndvi.shape[0]/100), dpi=100)
-    fig.patch.set_alpha(0)
-    ax.axis('off')
-    
-    # cmap para ndvi
-    cmap = plt.get_cmap("RdYlGn")
-    norm = plt.Normalize(vmin=-1, vmax=1)
-    rgba_img = cmap(norm(matriz_ndvi))
-    
-    # Hacer que los valores menores que 0 sean mas transparentes
-    rgba_img[matriz_ndvi < 0, 3] = 0.2
-    rgba_img[matriz_ndvi >= 0, 3] = 0.7 
-    
-    ax.imshow(rgba_img)
-    
-    buf = BytesIO()
-    fig.savefig(buf, format='png', bbox_inches='tight', pad_inches=0, transparent=True)
-    plt.close(fig)
-    buf.seek(0)
-    img_base64 = base64.b64encode(buf.read()).decode('utf-8')
-    img_url = f"data:image/png;base64,{img_base64}"
-    
+    def rgb_a_url(matriz_rgb):
+        fig, ax = plt.subplots(figsize=(matriz_rgb.shape[1]/100, matriz_rgb.shape[0]/100), dpi=100)
+        fig.patch.set_alpha(0)
+        ax.axis('off')
+        ax.imshow(matriz_rgb)
+        buf = BytesIO()
+        fig.savefig(buf, format='png', bbox_inches='tight', pad_inches=0, transparent=True)
+        plt.close(fig)
+        buf.seek(0)
+        return f"data:image/png;base64,{base64.b64encode(buf.read()).decode('utf-8')}"
+
+    def ndvi_a_url(matriz, alpha=0.85):
+        fig, ax = plt.subplots(figsize=(matriz.shape[1]/100, matriz.shape[0]/100), dpi=100)
+        fig.patch.set_alpha(0)
+        ax.axis('off')
+        cmap = plt.get_cmap("RdYlGn")
+        norm = plt.Normalize(vmin=-1, vmax=1)
+        rgba = cmap(norm(matriz))
+        rgba[matriz < 0, 3] = 0.2
+        rgba[matriz >= 0, 3] = alpha
+        ax.imshow(rgba)
+        buf = BytesIO()
+        fig.savefig(buf, format='png', bbox_inches='tight', pad_inches=0, transparent=True)
+        plt.close(fig)
+        buf.seek(0)
+        return f"data:image/png;base64,{base64.b64encode(buf.read()).decode('utf-8')}"
+
+    bounds = [[sur, oeste], [norte, este]]
+
     folium.raster_layers.ImageOverlay(
-        image=img_url,
-        bounds=[[sur, oeste], [norte, este]],
-        opacity=1.0,
-        name="NDVI",
+        image=rgb_a_url(color_verdadero),
+        bounds=bounds,
+        name="Color Verdadero (B04, B03, B02)",
+        show=False,
+    ).add_to(m)
+
+    folium.raster_layers.ImageOverlay(
+        image=rgb_a_url(falso_color),
+        bounds=bounds,
+        name="Falso Color (B08, B04, B03)",
+        show=False,
+    ).add_to(m)
+
+    folium.raster_layers.ImageOverlay(
+        image=ndvi_a_url(matriz_ndvi),
+        bounds=bounds,
+        name="NDVI (Indice de Vegetacion)",
+        show=True,
     ).add_to(m)
     
     folium.Rectangle(
-        bounds=[[sur, oeste], [norte, este]],
+        bounds=bounds,
         color="#ff0000",
         fill=False,
         weight=2,
         name="Area de estudio"
     ).add_to(m)
+    
+    # Leyendas dinamicas HTML
+    leyenda_html = """
+    <div id="leyenda_verdadero" style="position: fixed; bottom: 50px; right: 50px; width: 280px; height: auto; 
+         background-color: white; border:2px solid grey; z-index:9999; font-size:14px;
+         padding: 10px; border-radius: 5px; display: none;">
+         <b>Color Verdadero (RGB)</b><br>
+         <span style="font-size:12px;">Refleja la visión humana.</span><br>
+         <ul style="margin-bottom:0; padding-left:20px; font-size:12px;">
+            <li><b>Vegetación:</b> Tonos verdes</li>
+            <li><b>Suelo desnudo:</b> Marrón / claro</li>
+            <li><b>Agua:</b> Azul oscuro / negro</li>
+         </ul>
+    </div>
+
+    <div id="leyenda_falso" style="position: fixed; bottom: 50px; right: 50px; width: 280px; height: auto; 
+         background-color: white; border:2px solid grey; z-index:9999; font-size:14px;
+         padding: 10px; border-radius: 5px; display: none;">
+         <b>Falso Color (NIR)</b><br>
+         <span style="font-size:12px;">Resalta el vigor vegetal.</span><br>
+         <ul style="margin-bottom:0; padding-left:20px; font-size:12px;">
+            <li><b>Vegetación densa:</b> Rojo intenso</li>
+            <li><b>Suelo desnudo:</b> Tonos cian/grises</li>
+            <li><b>Agua:</b> Negro profundo</li>
+         </ul>
+    </div>
+
+    <div id="leyenda_ndvi" style="position: fixed; bottom: 50px; right: 50px; width: 280px; height: auto; 
+         background-color: white; border:2px solid grey; z-index:9999; font-size:14px;
+         padding: 10px; border-radius: 5px; display: block;">
+         <b>NDVI (Normalized Difference Veg. Index)</b><br>
+         <div style="background: linear-gradient(to right, #a50026, #f46d43, #ffffbf, #66bd63, #006837); 
+                     width: 100%; height: 20px; margin-top: 5px; margin-bottom: 5px;"></div>
+         <span style="float:left;">-1.0</span>
+         <span style="float:right;">1.0</span>
+         <div style="clear:both;"></div>
+         <span style="font-size:11px;">Rojo: Agua/Nubes | Verde: Vegetación Densa</span>
+    </div>
+
+    <script>
+        setTimeout(function() {
+            var map_keys = Object.keys(window).filter(k => k.startsWith('map_'));
+            if(map_keys.length > 0) {
+                var myMap = window[map_keys[0]];
+                
+                myMap.on('overlayadd', function(eventLayer) {
+                    if (eventLayer.name === 'Color Verdadero (B04, B03, B02)') {
+                        document.getElementById('leyenda_verdadero').style.display = 'block';
+                    } else if (eventLayer.name === 'Falso Color (B08, B04, B03)') {
+                        document.getElementById('leyenda_falso').style.display = 'block';
+                    } else if (eventLayer.name === 'NDVI (Indice de Vegetacion)') {
+                        document.getElementById('leyenda_ndvi').style.display = 'block';
+                    }
+                });
+                
+                myMap.on('overlayremove', function(eventLayer) {
+                    if (eventLayer.name === 'Color Verdadero (B04, B03, B02)') {
+                        document.getElementById('leyenda_verdadero').style.display = 'none';
+                    } else if (eventLayer.name === 'Falso Color (B08, B04, B03)') {
+                        document.getElementById('leyenda_falso').style.display = 'none';
+                    } else if (eventLayer.name === 'NDVI (Indice de Vegetacion)') {
+                        document.getElementById('leyenda_ndvi').style.display = 'none';
+                    }
+                });
+            }
+        }, 1000);
+    </script>
+    """
+    m.get_root().html.add_child(folium.Element(leyenda_html))
     
     folium.LayerControl().add_to(m)
     m.save(ruta_salida)
@@ -775,7 +877,14 @@ function evaluatePixel(samples) {
         estadisticas_ndvi,
         limites_bbox,
     )
-    ft_generar_mapa_interactivo_p1(matriz_ndvi, limites_bbox)
+    ft_generar_mapa_interactivo_p1(
+        banda_azul,
+        banda_verde,
+        banda_rojo,
+        banda_nir,
+        matriz_ndvi,
+        limites_bbox
+    )
 
 
 if __name__ == "__main__":
