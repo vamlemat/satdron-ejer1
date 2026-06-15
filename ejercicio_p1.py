@@ -134,17 +134,57 @@ def ft_validar_rango_fechas(fecha_inicio, fecha_fin):
         )
 
 
+def ft_calcular_bbox_desde_centro(latitud, longitud, ancho_px, alto_px):
+    """
+    Calcula el bounding box asumiendo que 1 pixel = 10 metros en el terreno,
+    centrado en la latitud y longitud especificadas.
+    """
+    import math
+    ancho_m = ancho_px * 10
+    alto_m = alto_px * 10
+    
+    # 1 grado de latitud = 111.32 km = 111320 m
+    delta_lat = (alto_m / 2) / 111320.0
+    # Para la longitud, dependemos de la latitud
+    delta_lon = (ancho_m / 2) / (111320.0 * math.cos(math.radians(latitud)))
+    
+    sur = latitud - delta_lat
+    norte = latitud + delta_lat
+    oeste = longitud - delta_lon
+    este = longitud + delta_lon
+    
+    return oeste, sur, este, norte
+
+
 def ft_pedir_parametros_usuario():
     """
     Solicita los parametros principales para generar la imagen satelital.
     """
-    print("\nIntroduce las coordenadas del area en grados decimales (WGS84).")
-    print("Orden esperado: oeste, sur, este, norte.")
+    print("\n¿Como desea definir el area de estudio?")
+    print("1. Bounding Box manual (Oeste, Sur, Este, Norte) [Por defecto]")
+    print("2. Coordenada central (Latitud, Longitud) y tamaño en pixeles")
+    
+    modo = input("Elige una opcion (1 o 2) [1]: ").strip()
+    
+    if modo == "2":
+        latitud = ft_pedir_float("Latitud central (ej. 37.03)", 37.03)
+        longitud = ft_pedir_float("Longitud central (ej. -4.55)", -4.55)
+        ancho = ft_pedir_entero("Ancho de salida en pixeles (1px=10m)", TAMANO_SALIDA_DEFECTO[0])
+        alto = ft_pedir_entero("Alto de salida en pixeles (1px=10m)", TAMANO_SALIDA_DEFECTO[1])
+        
+        oeste, sur, este, norte = ft_calcular_bbox_desde_centro(latitud, longitud, ancho, alto)
+        print(f"\n[INFO] Bounding Box calculado automáticamente: Oeste={oeste:.5f}, Sur={sur:.5f}, Este={este:.5f}, Norte={norte:.5f}")
+    else:
+        print("\nIntroduce las coordenadas del area en grados decimales (WGS84).")
+        print("Orden esperado: oeste, sur, este, norte.")
 
-    oeste = ft_pedir_float("Oeste / longitud minima", COORDENADAS_BBOX_DEFECTO[0])
-    sur = ft_pedir_float("Sur / latitud minima", COORDENADAS_BBOX_DEFECTO[1])
-    este = ft_pedir_float("Este / longitud maxima", COORDENADAS_BBOX_DEFECTO[2])
-    norte = ft_pedir_float("Norte / latitud maxima", COORDENADAS_BBOX_DEFECTO[3])
+        oeste = ft_pedir_float("Oeste / longitud minima", COORDENADAS_BBOX_DEFECTO[0])
+        sur = ft_pedir_float("Sur / latitud minima", COORDENADAS_BBOX_DEFECTO[1])
+        este = ft_pedir_float("Este / longitud maxima", COORDENADAS_BBOX_DEFECTO[2])
+        norte = ft_pedir_float("Norte / latitud maxima", COORDENADAS_BBOX_DEFECTO[3])
+
+        ancho = ft_pedir_entero("Ancho de salida en pixeles", TAMANO_SALIDA_DEFECTO[0])
+        alto = ft_pedir_entero("Alto de salida en pixeles", TAMANO_SALIDA_DEFECTO[1])
 
     if oeste >= este:
         raise ValueError("La coordenada oeste debe ser menor que la coordenada este.")
@@ -155,12 +195,10 @@ def ft_pedir_parametros_usuario():
     if not -90 <= sur <= 90 or not -90 <= norte <= 90:
         raise ValueError("Las latitudes deben estar entre -90 y 90.")
 
+    print("\nRango temporal:")
     fecha_inicio = ft_pedir_fecha("Fecha inicio YYYY-MM-DD", RANGO_FECHAS_DEFECTO[0])
     fecha_fin = ft_pedir_fecha("Fecha fin YYYY-MM-DD", RANGO_FECHAS_DEFECTO[1])
     ft_validar_rango_fechas(fecha_inicio, fecha_fin)
-
-    ancho = ft_pedir_entero("Ancho de salida en pixeles", TAMANO_SALIDA_DEFECTO[0])
-    alto = ft_pedir_entero("Alto de salida en pixeles", TAMANO_SALIDA_DEFECTO[1])
 
     limites_bbox = BBox(bbox=[oeste, sur, este, norte], crs=CRS.WGS84)
     return limites_bbox, (fecha_inicio, fecha_fin), (ancho, alto)

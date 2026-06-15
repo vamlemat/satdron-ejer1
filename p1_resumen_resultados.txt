@@ -5,7 +5,7 @@ PARAMETROS DE ENTRADA
 ----------------------
 Nivel de procesamiento: Sentinel-2 L2A
 Coleccion: s2l2a_cdse
-Bounding box WGS84: oeste=-4.56, sur=37.02, este=-4.54, norte=37.04
+Bounding box WGS84: oeste=-4,56, sur=37,02, este=-4,54, norte=37,04
 Rango de fechas: 2026-05-01 a 2026-06-01
 Tamano de salida: 512 x 512 pixeles
 
@@ -19,26 +19,26 @@ p1_resumen_resultados.txt
 VALORES DE COLOR VERDADERO
 ---------------------------
 Canal Rojo = B04 (reflectancia en rojo visible)
-  Minimo: 0.003800
-  Maximo: 0.942400
-  Media: 0.152575
-  Mediana: 0.153300
-  Percentil 10: 0.060600
-  Percentil 90: 0.232300
+  Minimo: 0,003800
+  Maximo: 0,942400
+  Media: 0,152575
+  Mediana: 0,153300
+  Percentil 10: 0,060600
+  Percentil 90: 0,232300
 Canal Verde = B03 (reflectancia en verde visible)
-  Minimo: 0.008400
-  Maximo: 1.827100
-  Media: 0.123986
-  Mediana: 0.119000
-  Percentil 10: 0.064600
-  Percentil 90: 0.183100
+  Minimo: 0,008400
+  Maximo: 1,827100
+  Media: 0,123986
+  Mediana: 0,119000
+  Percentil 10: 0,064600
+  Percentil 90: 0,183100
 Canal Azul = B02 (reflectancia en azul visible)
-  Minimo: 0.004900
-  Maximo: 1.956100
-  Media: 0.091543
-  Mediana: 0.084500
-  Percentil 10: 0.035800
-  Percentil 90: 0.147700
+  Minimo: 0,004900
+  Maximo: 1,956100
+  Media: 0,091543
+  Mediana: 0,084500
+  Percentil 10: 0,035800
+  Percentil 90: 0,147700
 
 LECTURA DEL COLOR VERDADERO
 -----------------------------
@@ -49,26 +49,26 @@ Valores mas altos en un canal significan mayor reflectancia en esa banda visible
 VALORES DE FALSO COLOR
 ----------------------
 Canal Rojo = B08 (infrarrojo cercano asignado al canal rojo)
-  Minimo: 0.007500
-  Maximo: 0.904800
-  Media: 0.294057
-  Mediana: 0.291300
-  Percentil 10: 0.223900
-  Percentil 90: 0.362300
+  Minimo: 0,007500
+  Maximo: 0,904800
+  Media: 0,294057
+  Mediana: 0,291300
+  Percentil 10: 0,223900
+  Percentil 90: 0,362300
 Canal Verde = B04 (rojo visible asignado al canal verde)
-  Minimo: 0.003800
-  Maximo: 0.942400
-  Media: 0.152575
-  Mediana: 0.153300
-  Percentil 10: 0.060600
-  Percentil 90: 0.232300
+  Minimo: 0,003800
+  Maximo: 0,942400
+  Media: 0,152575
+  Mediana: 0,153300
+  Percentil 10: 0,060600
+  Percentil 90: 0,232300
 Canal Azul = B03 (verde visible asignado al canal azul)
-  Minimo: 0.008400
-  Maximo: 1.827100
-  Media: 0.123986
-  Mediana: 0.119000
-  Percentil 10: 0.064600
-  Percentil 90: 0.183100
+  Minimo: 0,008400
+  Maximo: 1,827100
+  Media: 0,123986
+  Mediana: 0,119000
+  Percentil 10: 0,064600
+  Percentil 90: 0,183100
 
 LECTURA DEL FALSO COLOR
 -----------------------
@@ -80,24 +80,24 @@ Si B08 y B04 son parecidos o bajos, la vegetacion suele ser escasa o estar poco 
 ESTADISTICAS NDVI
 ------------------
 Pixeles validos: 262144
-NDVI minimo: -0.197056
-NDVI maximo: 0.954779
-NDVI medio: 0.331089
-NDVI mediana: 0.292152
-Percentil 10: 0.094700
-Percentil 25: 0.160993
-Percentil 75: 0.442187
-Percentil 90: 0.673653
+NDVI minimo: -0,197056
+NDVI maximo: 0,954779
+NDVI medio: 0,331089
+NDVI mediana: 0,292152
+Percentil 10: 0,094700
+Percentil 25: 0,160993
+Percentil 75: 0,442187
+Percentil 90: 0,673653
 
 DISTRIBUCION POR RANGOS
 ------------------------
-NDVI < 0: 1142 pixeles (0.44%)
+NDVI < 0: 1142 pixeles (0,44%)
   Interpretacion: agua, sombras, nubes o superficies sin vegetacion
-0 <= NDVI < 0.2: 80588 pixeles (30.74%)
+0 <= NDVI < 0.2: 80588 pixeles (30,74%)
   Interpretacion: suelo desnudo, urbano o vegetacion muy escasa
-0.2 <= NDVI < 0.4: 99848 pixeles (38.09%)
+0.2 <= NDVI < 0.4: 99848 pixeles (38,09%)
   Interpretacion: vegetacion moderada o posiblemente estresada
-NDVI >= 0.4: 80566 pixeles (30.73%)
+NDVI >= 0.4: 80566 pixeles (30,73%)
   Interpretacion: vegetacion densa o sana
 
 ADVERTENCIAS

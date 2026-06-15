@@ -25,6 +25,7 @@ from ejercicio_p1 import (
     ft_pedir_fecha,
     ft_pedir_float,
     ft_validar_rango_fechas,
+    ft_calcular_bbox_desde_centro,
 )
 
 def fmt_num(valor, decimales=6):
@@ -89,13 +90,32 @@ def ft_pedir_parametros_usuario_p2_api():
     print("Se descargaran dos imagenes Sentinel-2 L2A por API:")
     print("- imagen PRE-incendio")
     print("- imagen POST-incendio")
-    print("\nIntroduce las coordenadas del area en grados decimales (WGS84).")
-    print("Orden esperado: oeste, sur, este, norte.")
+    
+    print("\n¿Como desea definir el area de estudio?")
+    print("1. Bounding Box manual (Oeste, Sur, Este, Norte) [Por defecto]")
+    print("2. Coordenada central (Latitud, Longitud) y tamaño en pixeles")
+    
+    modo = input("Elige una opcion (1 o 2) [1]: ").strip()
+    
+    if modo == "2":
+        latitud = ft_pedir_float("Latitud central (ej. 43.51)", 43.51)
+        longitud = ft_pedir_float("Longitud central (ej. 16.66)", 16.66)
+        ancho = ft_pedir_entero("Ancho de salida en pixeles (1px=10m)", TAMANO_SALIDA_DEFECTO[0])
+        alto = ft_pedir_entero("Alto de salida en pixeles (1px=10m)", TAMANO_SALIDA_DEFECTO[1])
+        
+        oeste, sur, este, norte = ft_calcular_bbox_desde_centro(latitud, longitud, ancho, alto)
+        print(f"\n[INFO] Bounding Box calculado automáticamente: Oeste={oeste:.5f}, Sur={sur:.5f}, Este={este:.5f}, Norte={norte:.5f}")
+    else:
+        print("\nIntroduce las coordenadas del area en grados decimales (WGS84).")
+        print("Orden esperado: oeste, sur, este, norte.")
 
-    oeste = ft_pedir_float("Oeste / longitud minima", COORDENADAS_BBOX_P2_DEFECTO[0])
-    sur = ft_pedir_float("Sur / latitud minima", COORDENADAS_BBOX_P2_DEFECTO[1])
-    este = ft_pedir_float("Este / longitud maxima", COORDENADAS_BBOX_P2_DEFECTO[2])
-    norte = ft_pedir_float("Norte / latitud maxima", COORDENADAS_BBOX_P2_DEFECTO[3])
+        oeste = ft_pedir_float("Oeste / longitud minima", COORDENADAS_BBOX_P2_DEFECTO[0])
+        sur = ft_pedir_float("Sur / latitud minima", COORDENADAS_BBOX_P2_DEFECTO[1])
+        este = ft_pedir_float("Este / longitud maxima", COORDENADAS_BBOX_P2_DEFECTO[2])
+        norte = ft_pedir_float("Norte / latitud maxima", COORDENADAS_BBOX_P2_DEFECTO[3])
+
+        ancho = ft_pedir_entero("Ancho de salida en pixeles", TAMANO_SALIDA_DEFECTO[0])
+        alto = ft_pedir_entero("Alto de salida en pixeles", TAMANO_SALIDA_DEFECTO[1])
 
     if oeste >= este:
         raise ValueError("La coordenada oeste debe ser menor que la coordenada este.")
@@ -115,9 +135,6 @@ def ft_pedir_parametros_usuario_p2_api():
     post_inicio = ft_pedir_fecha("Fecha inicio POST YYYY-MM-DD", RANGO_POST_INCENDIO_DEFECTO[0])
     post_fin = ft_pedir_fecha("Fecha fin POST YYYY-MM-DD", RANGO_POST_INCENDIO_DEFECTO[1])
     ft_validar_rango_fechas(post_inicio, post_fin)
-
-    ancho = ft_pedir_entero("Ancho de salida en pixeles", TAMANO_SALIDA_DEFECTO[0])
-    alto = ft_pedir_entero("Alto de salida en pixeles", TAMANO_SALIDA_DEFECTO[1])
 
     limites_bbox = BBox(bbox=[oeste, sur, este, norte], crs=CRS.WGS84)
     return limites_bbox, (pre_inicio, pre_fin), (post_inicio, post_fin), (ancho, alto)
