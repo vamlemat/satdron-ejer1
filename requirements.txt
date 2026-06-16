@@ -3,3 +3,6 @@ rasterio
 sentinelhub
 python-dotenv
 matplotlib
+laspy
+lazrs
+scipy

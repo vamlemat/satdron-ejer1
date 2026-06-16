@@ -1,4 +1,36 @@
-# Practica P1 - Sentinel-2 L2A, NDVI y GeoTIFF
+# Prácticas de Teledetección: Sentinel-2 y LiDAR (P1, P2 y P3)
+
+## Índice
+
+- [1. Objetivo del ejercicio](#1-objetivo-del-ejercicio)
+- [2. Estructura del proyecto](#2-estructura-del-proyecto)
+- [3. Fuente de datos: Sentinel-2](#3-fuente-de-datos-sentinel-2)
+- [4. Nivel de procesamiento utilizado: Sentinel-2 L2A](#4-nivel-de-procesamiento-utilizado-sentinel-2-l2a)
+- [5. Bandas utilizadas](#5-bandas-utilizadas)
+- [6. Productos generados](#6-productos-generados)
+- [7. Que es el NDVI](#7-que-es-el-ndvi)
+- [8. Ejercicio P2: deteccion de cambios post-incendio](#8-ejercicio-p2-deteccion-de-cambios-post-incendio)
+- [9. Que es el NBR](#9-que-es-el-nbr)
+- [10. Que es el dNBR](#10-que-es-el-dnbr)
+- [11. Clasificacion de severidad en P2](#11-clasificacion-de-severidad-en-p2)
+- [12. Productos generados por P2](#12-productos-generados-por-p2)
+- [13. Requisitos previos](#13-requisitos-previos)
+- [14. Crear el entorno virtual](#14-crear-el-entorno-virtual)
+- [15. Instalar dependencias](#15-instalar-dependencias)
+- [16. Obtener credenciales de Copernicus](#16-obtener-credenciales-de-copernicus)
+- [17. Configurar el archivo .env](#17-configurar-el-archivo-env)
+- [18. Ejecutar la aplicacion](#18-ejecutar-la-aplicacion)
+- [19. Coordenadas: bounding box](#19-coordenadas-bounding-box)
+- [20. Fechas de consulta](#20-fechas-de-consulta)
+- [21. Tamano de salida](#21-tamano-de-salida)
+- [22. Explicacion del codigo](#22-explicacion-del-codigo)
+- [23. Visualizar resultados en QGIS](#23-visualizar-resultados-en-qgis)
+- [24. Comprobaciones realizadas](#24-comprobaciones-realizadas)
+- [25. Errores frecuentes](#25-errores-frecuentes)
+- [26. Ejercicio P3: Procesamiento LiDAR](#26-ejercicio-p3-procesamiento-lidar)
+- [27. Guion para explicar en clase](#27-guion-para-explicar-en-clase)
+- [28. Comandos principales](#28-comandos-principales)
+
 
 ## 1. Objetivo del ejercicio
 
@@ -41,7 +73,9 @@ El flujo completo es:
 ├── p2_dnbr.tif
 ├── p2_severidad_incendio.tif
 ├── p2_resumen_resultados.txt
-└── p2_panel_visual.png
+├── p2_panel_visual.png
+├── ejercicio_p3.py
+└── prueba_ejer3/
 ```
 
 Descripcion de los archivos:
@@ -66,6 +100,7 @@ Descripcion de los archivos:
 - `p2_severidad_incendio.tif`: clasificacion de severidad en 4 clases.
 - `p2_resumen_resultados.txt`: informe numerico de P2.
 - `p2_panel_visual.png`: panel visual de P2.
+- `ejercicio_p3.py`: procesamiento LiDAR (MDT, MDS, CHM).
 
 ## 3. Fuente de datos: Sentinel-2
 
@@ -481,6 +516,9 @@ python-dotenv
 matplotlib
 contextily
 folium
+laspy
+lazrs
+scipy
 ```
 
 Funcion de cada libreria:
@@ -491,6 +529,8 @@ Funcion de cada libreria:
 - `python-dotenv`: carga las credenciales desde `.env`.
 - `matplotlib`: genera los paneles visuales estaticos.
 - `contextily` y `folium`: generan los mapas interactivos en HTML con capas superpuestas, mapas base y leyendas dinamicas.
+- `laspy` y `lazrs`: leen y procesan nubes de puntos LiDAR (.las / .laz).
+- `scipy`: proporciona los algoritmos de interpolacion (griddata) para crear los modelos de terreno.
 
 ## 16. Obtener credenciales de Copernicus
 
@@ -538,6 +578,7 @@ El menu principal permite elegir:
 ```text
 1. P1 - Sentinel-2 L2A, NDVI y composiciones RGB
 2. P2 - Deteccion de cambios post-incendio con dNBR
+3. P3 - Procesamiento de nube de puntos LiDAR
 0. Salir
 ```
 
@@ -546,6 +587,7 @@ Tambien se puede ejecutar cada practica por separado:
 ```bash
 python ejercicio_p1.py
 python ejercicio_p2.py
+python ejercicio_p3.py
 ```
 
 Para P1, el programa pedira:
@@ -937,7 +979,34 @@ o:
 ./abrir_qgis_limpio.sh
 ```
 
-## 26. Guion para explicar en clase
+## 26. Ejercicio P3: Procesamiento LiDAR
+
+El tercer ejercicio trabaja con nubes de puntos 3D de tecnología LiDAR. El objetivo es obtener modelos raster continuos de la superficie y del terreno, para finalmente aislar la altura de la vegetación o construcciones.
+
+### 26.1 Flujo de trabajo de P3
+
+1. **Carga y filtrado:** El script `ejercicio_p3.py` utiliza `laspy` para leer los puntos. Se extraen los puntos clasificados de fábrica como Suelo (Clase 2) y Vegetación (Clases 3, 4, 5).
+2. **Rasterización segura:** Convierte el espacio 3D a una cuadrícula (raster) 2D calculando las dimensiones según la resolución deseada. Si el archivo abarca una zona enorme, el script ajustará la resolución automáticamente (ej. de 1m a 2m o 4m) para evitar que tu PC se quede sin memoria.
+3. **MDT (Terreno):** Interpola la altitud de los puntos de Suelo. Donde no hay datos de suelo (por culpa de las copas de los árboles o casas), `scipy.interpolate.griddata` rellena los huecos simulando el terreno desnudo.
+4. **MDS (Superficie):** Interpola usando todos los puntos (las cimas) para obtener la envolvente superior (tejados, copas de árboles).
+5. **CHM (Altura del Dosel):** Se obtiene restando matrices: `CHM = MDS - MDT`. El resultado son las alturas netas de los objetos sobre el suelo.
+### 26.2 Productos generados por P3
+
+Todos los resultados se guardan en la carpeta `prueba_ejer3`:
+
+- `p3_mdt.tif`: Raster con la elevación del terreno.
+- `p3_mds.tif`: Raster con la elevación de la superficie.
+- `p3_chm.tif`: Raster con las alturas vegetales o estructurales.
+- `p3_panel_lidar.png`: Comparativa estática.
+- `p3_mapa_interactivo.html`: Mapa web de `folium` con el MDT y CHM superpuestos al satélite.
+
+### 26.3 El mapa interactivo y el código EPSG
+
+A diferencia de Sentinel-2 (que usa Latitud/Longitud), los archivos LiDAR miden las distancias en metros según un Sistema de Coordenadas específico (ej. UTM Zona 30). Para que el script pueda dibujar tu modelo 3D sobre el mapa interactivo web de satélite de `folium`, el programa te preguntará por el **código EPSG** de tu archivo.
+
+Si tienes un archivo del IGN de la península, el código más común es **`25830`**. El programa usará la librería `pyproj` para traducir todas las coordenadas a grados y generar un mapa `.html` de alta precisión que se abrirá solo.
+
+## 27. Guion para explicar en clase
 
 En esta practica se ha creado una aplicacion en Python para procesar imagenes Sentinel-2. Primero se prepara un entorno virtual y se instalan las librerias necesarias. Despues se configuran las credenciales de Copernicus en un archivo `.env`, que permite conectarse de forma segura a la API.
 
@@ -951,7 +1020,9 @@ El segundo ejercicio descarga dos imagenes por API: una anterior y otra posterio
 
 Para exponer y defender este proyecto en clase, utiliza los **Mapas Interactivos**. Al finalizar los scripts, se abrira automaticamente en el navegador el mapa correspondiente (`p1_mapa_interactivo.html` o `p2_mapa_interactivo.html`). Empieza mostrando el mapa base de satelite para contextualizar la zona real. Luego, abre el control de capas arriba a la derecha y ve activando los distintos analisis (Color Verdadero, Falso Color, NDVI, Severidad). Las leyendas se actualizaran automaticamente abajo a la derecha, permitiendote justificar de manera super visual y profesional lo que significa cada color y cada nivel de severidad o vegetacion obtenida.
 
-## 27. Comandos principales
+Finalmente, el **Ejercicio 3** es distinto y complementario. Se usa programación para procesar millones de puntos láser (LiDAR). Explicarás cómo aislar los puntos clasificados como "Suelo" permite generar, mediante interpolación matemática, un Modelo Digital del Terreno (MDT). Al restarle este MDT al modelo completo (MDS), obtenemos el Modelo de Altura del Dosel (CHM). Muestra el panel comparativo (`p3_panel_lidar.png`) generado por tu script, donde se ve perfectamente cómo emergen las alturas de los árboles al eliminar el relieve del terreno.
+
+## 28. Comandos principales
 
 Crear entorno:
 

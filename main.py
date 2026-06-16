@@ -4,6 +4,8 @@ from ejercicio_p1 import (
     ft_pedir_parametros_usuario,
 )
 from ejercicio_p2 import ft_main_p2
+from ejercicio_p3 import procesar_lidar
+import os
 
 
 def ft_main():
@@ -12,6 +14,7 @@ def ft_main():
         print("=" * 14)
         print("1. P1 - Sentinel-2 L2A, NDVI y composiciones RGB")
         print("2. P2 - Deteccion de cambios post-incendio con dNBR")
+        print("3. P3 - Procesamiento de nube de puntos LiDAR")
         print("0. Salir")
 
         opcion = input("Selecciona una opcion [1]: ").strip() or "1"
@@ -34,11 +37,20 @@ def ft_main():
             ft_main_p2()
             return
 
+        if opcion == "3":
+            ruta_archivo = input("Introduce la ruta del archivo LiDAR (.las/.laz) [muestra_lidar.las]: ").strip() or "muestra_lidar.las"
+            if not os.path.exists(ruta_archivo):
+                print(f"\n[ERROR] No se encuentra el archivo: {ruta_archivo}")
+            else:
+                epsg = input("Introduce el código EPSG de tu archivo (ej. 25830 para España peninsular) [25830]: ").strip() or "25830"
+                procesar_lidar(ruta_archivo, epsg=epsg)
+            return
+
         if opcion == "0":
             print("Saliendo.")
             return
 
-        print("[AVISO] Opcion no valida. Elige 1, 2 o 0.")
+        print("[AVISO] Opcion no valida. Elige 1, 2, 3 o 0.")
 
 
 if __name__ == "__main__":
